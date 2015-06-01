@@ -1,6 +1,6 @@
 # Project Specific
-z_input/*.jpg
-z_output/*.jpg
+z_input/*.*
+z_output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
