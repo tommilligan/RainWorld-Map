@@ -1,0 +1,35 @@
+<!doctype html>
+<head>
+<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
+<style>
+html, body {
+    height:100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background-color: #000000;
+}
+#map {
+    height: 512px;
+    width: 960px;
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+}
+</style>
+</head>
+<body>
+<div id='map'></div>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
+<script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
+<script type='text/javascript'>
+var map = L.map('map').setView(new L.LatLng(0,0), 0);
+L.tileLayer.zoomify('http://localhost/RainWorld-Map/map_tiles/', {
+    width: 1280,
+    height: 720,
+    tolerance: 0.8,
+    attribution: 'Game: Rain World'
+}).addTo(map);
+</script>
+</body>
