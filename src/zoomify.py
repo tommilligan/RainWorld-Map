@@ -14,7 +14,7 @@ def divisions_required(total_length, sub_length):
 input_path = 'C:/Users/Thomas/Documents/Code/RainWorld-Map/RainWorld-Map/z_input/RainWorld-Map.jpg'
 big_image = Image.open(input_path)
 max_divisions_required = max(divisions_required(big_image.size[0], TILE_SIZE), divisions_required(big_image.size[1], TILE_SIZE))
-max_zoom_level = int(math.ceil(math.log(max_divisions_required, 2)))
+max_zoom_level = int(math.ceil(math.log(max_divisions_required, 2)+1))
 print big_image.size
 
 # Tile Generation
