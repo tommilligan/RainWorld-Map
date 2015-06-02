@@ -1,10 +1,6 @@
 <!doctype html>
 <head>
-<?php 
-$xml_raw = file_get_contents('map_tiles/ImageProperties.xml');
-$xml_data = simplexml_load_string($xml_raw);
-//print_r($xml_data);
-?>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
 <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
 <style>
 html, body, #map {
@@ -22,12 +18,20 @@ html, body, #map {
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
 <script type='text/javascript'>
+
+// Get data about image from XML
+src_dir = 'map_tiles/';
+src_meta = src_dir+'ImageProperties.xml';
+var xmlDoc = $.ajax({type: "GET", url: src_meta, async: false}).responseText;
+
+// Make leaflet viewer
 var map = L.map('map').setView(new L.LatLng(0,0), 0);
-L.tileLayer.zoomify('http://localhost/RainWorld-Map/map_tiles/', {
-    width: <?php print((string) $xml_data['WIDTH'])?>,
-    height: <?php print((string) $xml_data['HEIGHT'])?>,
+L.tileLayer.zoomify(src_dir, {
+    width: $(xmlDoc).attr('WIDTH'),
+    height: $(xmlDoc).attr('HEIGHT'),
     tolerance: 0.8,
     attribution: 'Game: Rain World'
 }).addTo(map);
+
 </script>
 </body>
