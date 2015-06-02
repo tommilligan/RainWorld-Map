@@ -5,34 +5,24 @@ import math
 import glob
 import shutil
 
-TILE_SIZE = 256 # must be integer
-TOP_DIR = os.path.dirname(os.path.realpath(os.path.join(sys.argv[0],'..')))
-TILES_PER_SUBDIR = 256
-TILE_SUBDIR_PREFIX = 'TileGroup'
+import common
 
-def make_dir_if_not_found(dir_path):
-    if os.path.isdir(dir_path) is not True:
-        os.makedirs(dir_path)
-    return None
-
-# Get directory names, make if they don't exist, check only one input file, get input file path
-directories = (os.path.normpath(os.path.join(TOP_DIR, 'z_input')), # Source directory
-               os.path.normpath(os.path.join(TOP_DIR, 'z_output')) # Output directory
-               )
-
-if os.path.isdir(directories[1]) is True:
-    shutil.rmtree(directories[1])
-for dir_path in directories:
-    make_dir_if_not_found(dir_path)
-input_files = glob.glob(os.path.join(directories[0],'*.jpg'))
-if len(input_files) != 1:
-    sys.exit('Only one input .jpg file is allowed in the z_input directry')
-        
 def divisions_required(total_length, sub_length):
     precise = total_length/sub_length
     if total_length%sub_length == 0:
         precise = precise-1
     return int(math.ceil(precise)+1)
+
+TILE_SIZE = 256 # must be integer
+TOP_DIR = common.get_top_dir()
+TILES_PER_SUBDIR = 256
+TILE_SUBDIR_PREFIX = 'TileGroup'
+
+# Get directory names, make if they don't exist, check only one input file, get input file path
+directories = common.initialise_subdirs(['big_image', 'zoomify_tiles'])
+input_files = glob.glob(os.path.join(directories[0],'*.jpg'))
+if len(input_files) != 1:
+    sys.exit('Only one input .jpg file is allowed in the input directry')
 
 # Open image and determine size, tiles and zoom levels required
 input_path = os.path.join(directories[0],input_files[0])
@@ -68,7 +58,7 @@ for loop_zoom in xrange(0, int(max_zoom_level)):
             tile_id = str(loop_zoom)+'-'+str(loop_col)+'-'+str(loop_row)
             tile_subdir_suffix = str(int(math.floor(tiles_saved/TILES_PER_SUBDIR)))
             tile_subdir = os.path.join(directories[1], TILE_SUBDIR_PREFIX+tile_subdir_suffix)
-            make_dir_if_not_found(tile_subdir)
+            common.make_dir_if_not_found(tile_subdir)
             tile_save_path = os.path.join(tile_subdir, tile_id+'.jpg')
             
             # Crop, resize and save tile
