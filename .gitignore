@@ -1,6 +1,6 @@
 # Project Specific
-z_input/*.*
-z_output/
+big_image/*.*
+zoomify_tiles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

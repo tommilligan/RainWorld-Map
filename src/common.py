@@ -22,3 +22,6 @@ def initialise_subdirs(dir_names):
     else:
         sys.exit('Bad directories specified')
     return directories
+    
+def get_db_path():
+    return os.path.join(get_top_dir(), 'assets', 'network.db')
