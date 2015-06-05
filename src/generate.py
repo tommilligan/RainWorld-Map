@@ -15,18 +15,22 @@ MODE = (a, b)
 a: 0=width, 1=depth (order in which initial positions are calculated)
 b: 0=final, 1=continuous (how ofter spring_layout is calculated)
 '''
-MODE = tuple([0, 0])
+MODE = (1, 0)
 
 # even numbers are best
-SCREENSHOT_SIZE = tuple([1366, 768])
+BACKGROUND_COLOR = (26, 11, 32)
+SCREENSHOT_SIZE = (1366, 768)
 IMAGE_PADDING = 500
 NODE_SIZE = 16
 NODE_PADDING = 4
-LINE_WIDTH = 6
 LABEL_LINE_HEIGHT = 25
 LABEL_LINE_OFFSET = 15
-LABEL_IMAGE_OFFSET = tuple([20, 20])
-LABEL_IMAGE_BOUNDS = tuple([100, 100])
+LABEL_IMAGE_OFFSET = (20, 20)
+LABEL_IMAGE_BOUNDS = (100, 100)
+SKELETON_COLOR = (255, 0, 102)
+DETAIL_COLOR = (0, 255, 102)
+SKELETON_LINE_WIDTH = 2
+DETAIL_LINE_WIDTH = 6
 
 # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
 def label_line_topleft(scrn, x):
@@ -34,13 +38,12 @@ def label_line_topleft(scrn, x):
 
 def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
-    
-    
+
 conn = sqlite3.connect(DB_LOCATION)
 region_cursor = conn.cursor()
 region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
 regions = region_cursor.fetchall()
-# pring region maps separately
+# print region maps separately
 for region in regions:
     print '>', region[1]
     area_cursor = conn.cursor()
@@ -77,7 +80,7 @@ for region in regions:
                 # calculate an initial position for room from initial room
                 relative_px = tuple(node[x]-link_node[x] for x in range(2))
                 absolute_px = tuple(pos_rough[area][x]+relative_px[x] for x in range(2))
-                # add room to pos list (key, tuple(x_pos, y_pos))
+                # add room to pos list (key, (x_pos, y_pos))
                 pos_rough.update({link_node[2] : absolute_px})
                 # if same region (NOT region-gate), further search needed, add to pos_to_expand
                 link_cursor = conn.cursor()
@@ -101,7 +104,7 @@ for region in regions:
     pos_spring = nx.spring_layout(G, pos=pos_rough)
     
     # make image using positions given
-    SCALE = (max(SCREENSHOT_SIZE)*len(G.nodes()))/2
+    SCALE = int((max(SCREENSHOT_SIZE)*len(G.nodes()))/2)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
     image_origin = tuple(math.floor(image_size_init[x]/2) for x in range(2))
     # scale up coords to image size and centre (origin)
@@ -109,7 +112,7 @@ for region in regions:
               for x in range(2))
               for key, pos in pos_spring.iteritems()
               }
-    big_image = Image.new('RGB', image_size_init, color=(0, 0, 0))
+    big_image = Image.new('RGB', image_size_init, color=BACKGROUND_COLOR)
     big_draw = ImageDraw.Draw(big_image)
     font = ImageFont.load_default()
     
@@ -117,7 +120,7 @@ for region in regions:
     '''
     look at scale|spring k value for overlapping nodes?
     '''
-    print 'Collating area images'
+    print 'Collating'
     for key, pos in pos_px.iteritems():
         label_cursor = conn.cursor()
         label_cursor.execute('SELECT name, type FROM areas WHERE key = ?', (key,))
@@ -146,21 +149,23 @@ for region in regions:
         else:
             None
         
-        
-        #skeleton
-        big_draw.rectangle((tuple(math.floor(x-NODE_SIZE/2) for x in pos), tuple(math.floor(x+NODE_SIZE/2) for x in pos)), outline=(255, 0, 0))
-        
-    # draw edges
-    print 'Connecting'
+        #detail edges
+        node_cursor = conn.cursor()
+        node_cursor.execute('SELECT x_pos, y_pos, link_key FROM nodes WHERE area = ? ORDER BY key ASC', (key,))
+        for node in node_cursor:
+            # look up connecting node id -> area id
+            link_cursor = conn.cursor()
+            link_cursor.execute('SELECT x_pos, y_pos, area FROM nodes WHERE key = ?', (node[2],))
+            link_node = link_cursor.fetchone()
+            link_area_pos = pos_px[link_node[2]]
+            node_pos = tuple([pos[x]+node[x] for x in range(2)])
+            link_node_pos = tuple([link_area_pos[x]+link_node[x] for x in range(2)])
+            big_draw.line([node_pos, link_node_pos], fill=DETAIL_COLOR, width=DETAIL_LINE_WIDTH)
+    
+    #skeleton edges
     for edge in G.edges():
-        big_draw.line([pos_px[edge[0]], pos_px[edge[1]]], fill=(255, 0, 102), width=LINE_WIDTH)
-    # label nodes
-    print 'Labelling'
+        big_draw.line([pos_px[edge[0]], pos_px[edge[1]]], fill=SKELETON_COLOR, width=SKELETON_LINE_WIDTH)
 
-    for key, pos in pos_px.iteritems():
-        label_cursor = conn.cursor()
-        label_cursor.execute
-        big_draw.text(tuple(x+NODE_SIZE+NODE_PADDING for x in pos), str(key), font=font)
     # save
     print 'Saving'
     big_image_path = os.path.join(directories[1], region[1]+'.png')
