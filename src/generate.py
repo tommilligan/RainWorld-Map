@@ -35,6 +35,7 @@ import networkx as nx
 import math
 import sys
 import warnings
+import argparse
 
 import common
 
@@ -46,6 +47,15 @@ import common
         '''
 
 
+parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments
+parser.add_argument('-p', '--palette', default='default',
+                   help='Color palette and format options to use')
+parser.add_argument('-r', '--region',
+                   help='Region to render - default is all')
+args = parser.parse_args()
+PALETTE = args.palette
+SPECIFIED_REGION = args.region
+        
 directories = common.initialise_subdirs(['assets', 'big_image'])
 DB_LOCATION = common.get_db_path()
 
@@ -56,7 +66,6 @@ a: 0=width, 1=depth (order in which initial positions are calculated)
 b: 0=final, 1=continuous, 2=none (how ofter spring_layout is calculated)
 '''
 
-PALETTE = sys.argv[1]
 '''
 PALETTE = string
 > default
@@ -150,13 +159,6 @@ DETAIL_LINE_WIDTH = int(pal_get(pal_detail_line)*IMAGE_SCALE_FACTOR)
 LABEL_LINE_HEIGHT = FONT_SIZE+6
 LABEL_LINE_OFFSET = int(FONT_SIZE/2)
 
-# Warning Supression
-if PALETTE is not 'debug':
-    #Dealing with large images - DecompressionBomb warning is expected and supressed
-    warnings.simplefilter('ignore', Image.DecompressionBombWarning)
-    #Warning of upgrade in future - will not affect code
-    #warnings.simplefilter('ignore', FutureWarning)
-
 # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
 def label_line_topleft(scrn, x):
     return tuple([scrn[0]+(LABEL_LINE_OFFSET*x), scrn[1]-(LABEL_LINE_HEIGHT*x)])
@@ -189,18 +191,15 @@ def get_area_screenshot(area):
         to_return = to_return.resize(tuple([int(to_return.size[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)]))
     return to_return
     
-conn = sqlite3.connect(DB_LOCATION)
-region_cursor = conn.cursor()
-region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
-regions = region_cursor.fetchall()
-# print region maps separately
-for region in regions:
+def draw_map(region):
     print '>', region[1].upper()
     print '> Calculating network'
     area_cursor = conn.cursor()
     area_cursor.execute('SELECT key FROM areas WHERE region = ? ORDER BY key ASC', (region[0],))
     initial_area = area_cursor.fetchone()
-    
+    if not initial_area:
+        print 'Region has no areas'
+        return None
     # Initialise graph, and add area with lowest id as the origin room
     G = nx.Graph()
     G.add_node(initial_area[0])
@@ -265,12 +264,10 @@ for region in regions:
         # optimise node positions using Fruchterman-Reingold force-directed algorithm
         opt_dist_default = 1/math.sqrt(len(pos_rough))
         opt_dist = opt_dist_default/NETWORK_CONTRACTION
-        # this will generate FutureWarning
-        pos_spring = nx.spring_layout(G, pos=pos_rough, k=opt_dist)
-    '''
-    print pos_rough
-    print pos_spring
-    '''
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            # WARNING pos_spring generates a numpy based FutureWarning
+            pos_spring = nx.spring_layout(G, pos=pos_rough, k=opt_dist)
     
     print '> Making image'
     # make image using positions given
@@ -288,7 +285,10 @@ for region in regions:
     est_px = image_size_init[0]*image_size_init[1]
     print '>> Properties:', image_size_init, est_px, 'pixels'
     print '>> Estimated uncompressed size:', float(est_px*4)/float(1024**3), 'GB'
-    big_image = Image.new('RGBA', image_size_init, color=BACKGROUND_COLOR)
+    with warnings.catch_warnings():
+        # WARNING Image.new generates a DecompressionBomb warning with large file sizes
+        warnings.simplefilter("ignore")
+        big_image = Image.new('RGBA', image_size_init, color=BACKGROUND_COLOR)
     big_draw = ImageDraw.Draw(big_image)
     font = ImageFont.truetype(font=FONT_PATH, size=FONT_SIZE)
     #DEPRECATED font = ImageFont.load_default()
@@ -390,3 +390,18 @@ for region in regions:
     print '>> Saving'
     big_image_path = os.path.join(directories[1], region[1]+'.png')
     big_image.save(big_image_path, quality=100)
+    return None
+
+conn = sqlite3.connect(DB_LOCATION)
+region_cursor = conn.cursor()
+if SPECIFIED_REGION:
+    region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
+    region = region_cursor.fetchone()
+    if region:
+        draw_map(region)
+else:
+    region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
+    regions = region_cursor.fetchall()
+    # print region maps separately
+    for region in regions:
+        draw_map(region)
