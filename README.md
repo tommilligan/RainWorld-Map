@@ -10,12 +10,15 @@ The game devs are James Primate and [Joar Jakobsson](http://joarportfolio.com/)
 - Discuss on the official [Devlog](http://forums.tigsource.com/index.php?topic=25183.0)
 - See updates from the [Kickstarted campaign](https://www.kickstarter.com/projects/rain-world/project-rain-world) (for an abbreviated version of the DevLog)
 - Add the [Steam store page](http://store.steampowered.com/app/312520) to your wishist
-Contribute to the [community wiki](http://rainworld.gamepedia.com/Rain_World_Wiki)
+- Contribute to the [community wiki](http://rainworld.gamepedia.com/Rain_World_Wiki)
 
 ## View the map
 The current map is available to view [here](http://tommilligan.github.io/RainWorld-Map/map.html). Please note this a dev version, and is low resolution. Corrections and suggestions are welcomed - please get in touch via the email address on my GitHub profile.
 
 ## Build your own map
+__FAIR WARNING
+This code is under *extremely* active development and will probably be re-written several times. Don't expect *anything* you do now to work for very long.__
+
 ### Installation
 The following dependencies are required on Python 2 (tested v2.7.9). Several sub-dependencies are required, notably numpy. 
 - Pillow (tested v2.8.1)
