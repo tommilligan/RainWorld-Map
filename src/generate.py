@@ -117,16 +117,13 @@ pal_missing_scrn_overlay_col = {
 pal_skeleton_line = {'default': 0, 'debug': 6}
 pal_detail_line = {'default': 9, 'debug': 12}
 pal_font_size = {'default': 128, 'debug': 192}
-pal_icon_scale = {'default': 1, 'debug': 3}
+pal_icon_scale = {'default': 1.0, 'debug': 3.0}
         
 # even numbers are best
 BACKGROUND_COLOR = pal_get(pal_background_col)
 SKELETON_COLOR = pal_get(pal_skeleton_col)
 DETAIL_COLOR = pal_get(pal_detail_col)
-SKELETON_LINE_WIDTH = pal_get(pal_skeleton_line)
-DETAIL_LINE_WIDTH = pal_get(pal_detail_line)
 FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
-FONT_SIZE = pal_get(pal_font_size)
 TITLE_COLOR = pal_get(pal_title_col)
 SUBTITLE_COLOR = pal_get(pal_subtitle_col)
 LABEL_IMAGE_COLOR = SUBTITLE_COLOR
@@ -135,15 +132,21 @@ MISSING_SCRN_BG_COLOR = pal_get(pal_missing_scrn_bg_col)
 MISSING_SCRN_OVERLAY_COLOR = pal_get(pal_missing_scrn_overlay_col)
 MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
 
-SCREENSHOT_RESIZE_RATIO = 1.0
+
 RAW_SCREENSHOT_SIZE = (1366, 768)
+IMAGE_SCALE_FACTOR = 0.25
+SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
 ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)])
-NETWORK_CONTRACTION = 2.2 # Changes style of network # 2.2 works
-NETWORK_SPACING = 2.25 #WANT THIS BIGGER IF POSSIBLE! # 2.25 works
-IMAGE_PADDING = 800
-LABEL_IMAGE_INSET = 100
-LABEL_IMAGE_SPACING = 20
-LABEL_IMAGE_SCALE = pal_get(pal_icon_scale)
+NETWORK_CONTRACTION = 3 # Changes style of network # 2.2 works
+NETWORK_SPACING = 3 #WANT THIS BIGGER IF POSSIBLE! # 2.25 works
+IMAGE_PADDING = int(800*IMAGE_SCALE_FACTOR)
+LABEL_IMAGE_INSET = int(100*IMAGE_SCALE_FACTOR)
+LABEL_IMAGE_SPACING = int(20*IMAGE_SCALE_FACTOR)
+LABEL_IMAGE_SCALE = pal_get(pal_icon_scale)*IMAGE_SCALE_FACTOR
+FONT_SIZE = int(pal_get(pal_font_size)*IMAGE_SCALE_FACTOR)
+SKELETON_LINE_WIDTH = int(pal_get(pal_skeleton_line)*IMAGE_SCALE_FACTOR)
+DETAIL_LINE_WIDTH = int(pal_get(pal_detail_line)*IMAGE_SCALE_FACTOR)
+
 LABEL_LINE_HEIGHT = FONT_SIZE+6
 LABEL_LINE_OFFSET = int(FONT_SIZE/2)
 
@@ -173,14 +176,18 @@ def draw_network(draw, graph, position_dict, line_width, color):
 
 def get_area_screenshot(area):
     screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
+    to_return = None
     if os.path.isfile(screenshot_path):
-        return Image.open(screenshot_path)
+        to_return = Image.open(screenshot_path)
     else:
         mask = Image.open(MISSING_SCRN_OVERLAY_PATH)
         base = Image.new('RGBA', mask.size, color=MISSING_SCRN_BG_COLOR)
         overlay = Image.new('RGBA', mask.size, color=MISSING_SCRN_OVERLAY_COLOR)
         base.paste(overlay, box=(0,0), mask=mask)
-        return base
+        to_return = base
+    if SCREENSHOT_RESIZE_RATIO != 1.0:
+        to_return = to_return.resize(tuple([int(to_return.size[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)]))
+    return to_return
     
 conn = sqlite3.connect(DB_LOCATION)
 region_cursor = conn.cursor()
@@ -326,7 +333,7 @@ for region in regions:
             if not H.has_node(node[3]):
                 #add node to detailed graph and store position
                 H.add_node(node[3])
-                node_pos = tuple([pos[x]+node[x] for x in range(2)])
+                node_pos = tuple([pos[x]+node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
                 #save to node keyed dict to draw later
                 pos_detail_px.update({node[3]: node_pos})
                 # look up connecting node id -> area id
@@ -338,7 +345,7 @@ for region in regions:
                     H.add_node(node[2])
                     H.add_edge(node[2], node[3])
                     link_area_pos = pos_px[link_node[2]]
-                    link_node_pos = tuple([link_area_pos[x]+link_node[x] for x in range(2)])
+                    link_node_pos = tuple([link_area_pos[x]+link_node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
                     #save to node keyed dict to draw later
                     pos_detail_px.update({node[2]: link_node_pos})
                 
@@ -372,7 +379,7 @@ for region in regions:
             label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
             if os.path.isfile(label_path):
                 label_mask = Image.open(label_path)
-                label_mask = label_mask.resize(tuple([label_mask.size[x]*LABEL_IMAGE_SCALE for x in range (2)]))
+                label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
                 label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
                 # Centre labels and add padding
                 label_topleft = tuple([int(pos_topleft_px[key][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0])), int(pos_topleft_px[key][1]+label_col_current_height+LABEL_IMAGE_SPACING)])
