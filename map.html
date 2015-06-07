@@ -1,5 +1,6 @@
 <!doctype html>
 <head>
+<link rel="stylesheet" type="text/css" href="assets/RainWorld-Map.css" />
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
 <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
 <style>
@@ -14,6 +15,7 @@ html, body, #map {
 </style>
 </head>
 <body>
+<!-- Content -->
 <div id='map'></div>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
@@ -34,6 +36,5 @@ L.tileLayer.zoomify(src_dir, {
 }).addTo(map);
 map.panBy([103, 79]);
 map.zoomIn(4);
-
 </script>
 </body>

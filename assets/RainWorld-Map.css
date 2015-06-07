@@ -3,7 +3,10 @@
     src: url(saxmono.ttf);
     format("truetype");
 }
-
+h1, h2, h3, h4, h5, h6, p {
+    font-family: "saxmono";
+    color: rgba(215, 207, 222, 1);
+}
 a {
     text-decoration: none;
 }
