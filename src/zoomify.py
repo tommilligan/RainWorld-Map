@@ -31,8 +31,7 @@ def max_zoom_level(size):
     
 def zoomify_order(image_size, output_dir):
     '''image_size must be tuple in (x, y) format, output_dir must be string'''
-    print 'Moving files'
-    # Get list of all files in dir
+    print '>> Moving files'
     tiles_moved = 0
     max_zoom = max_zoom_level(image_size)
     for loop_zoom in xrange(0, int(max_zoom)):
@@ -56,15 +55,16 @@ def zoomify_order(image_size, output_dir):
                 except IOError:
                     continue
                 tiles_moved = tiles_moved+1
+    return tiles_moved
     
-def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offset=(0, 0)):
+def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offset=(0, 0), tilesize=0):
     '''big_image is an image object containing the image to be tiled
         max_zoom_level indicates how many zoom levels are required (important for directories)
         output_dir is the top dir for output
         offset is used to indicate the position of this slice in directory processing'''
-    tiles_saved = 0 # Counter of how many tiles have been generated, for placement in sub-dirs
     #Zoom level
     for loop_zoom in xrange(min_zoom_level, int(max_zoom_level)):
+        #DUBUG! if loop_zoom > 3: continue
         area_size_multiplier = 2**(max_zoom_level-1-loop_zoom)
         area_side_length = TILE_SIZE*area_size_multiplier
         rows_required = divisions_required(big_image.size[1], area_side_length)
@@ -86,21 +86,45 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
                 area_size_actual = (box[2]-box[0], box[3]-box[1])
                 area_resize = tuple(d/area_size_multiplier for d in area_size_actual)
                 # 
-                tile_id = str(loop_zoom)+'-'+str(loop_col+offset[1]*cols_required)+'-'+str(loop_row+offset[0]*rows_required)
+                tile_id = str(loop_zoom)+'-'+str(loop_col+(offset[0]*divisions_required(tilesize, area_side_length)))+'-'+str(loop_row+(offset[1]*divisions_required(tilesize, area_side_length)))
                 tile_save_path = os.path.join(output_dir, tile_id+'.jpg')
                 
                 # Crop, resize and save tile
                 tile_raw = big_image.crop(box)
                 tile_resampled = tile_raw.resize(area_resize)
                 tile_resampled.save(tile_save_path)
-                tiles_saved = tiles_saved+1
-    return tiles_saved
+    return None
 
+def zoomify_lowres_composite(min_zoom_level, max_zoom_level, image_size, output_dir):
+    '''Designed to provide low-res composites of the lower level zoom levels, from previously generated .jpg tiles in the layer below (only for directory processing'''
+    print '>> Adding low-res preview tiles'
+    area_size_multiplier = 2**(min_zoom_level)
+    area_side_length = TILE_SIZE*area_size_multiplier
+    dim_required = divisions_required(area_side_length, TILE_SIZE)
+    canvas_size = tuple([int(image_size[x]/(2**(max_zoom_level-1-min_zoom_level))) for x in range(2)])
+    canvas = Image.new('RGBA', canvas_size, color=(255, 255, 255))
+    # Each row
+    for loop_row in xrange(0, dim_required):
+        # Columns in row
+        for loop_col in xrange(0, dim_required):
+            lq_path = os.path.join(output_dir, str(min_zoom_level)+'-'+str(loop_col)+'-'+str(loop_row)+'.jpg')
+            try:
+                lq = Image.open(lq_path)
+            except IOError:
+                None
+            canvas.paste(lq, box=(loop_col*TILE_SIZE, loop_row*TILE_SIZE))
+        
+    lq_size_multiplier = 2**(min_zoom_level-1)
+    lq_size = tuple([canvas_size[x]/lq_size_multiplier for x in range(2)])
+    downscaled = canvas.resize(lq_size)
+    zoomify_slice(downscaled, min_zoom_level, output_dir)
+    return None
+    
 def zoomify(path, output_dir):
     print '> Zoomifying', path
     # Write XML metadata file
     root = ET.Element('IMAGE_PROPERTIES')
-    tiles_saved = 0
+    tiles_moved = 0
     
     #if path points to hq-format directory
     if os.path.isdir(path):
@@ -125,11 +149,12 @@ def zoomify(path, output_dir):
                 for loop_col in xrange(0, int(cols)):
                     tile_id = 'hq'+'-'+str(loop_col)+'-'+str(loop_row)
                     tile_open_path = os.path.join(path, tile_id+'.png')
+                    hq_offset = (loop_col, loop_row)
                     print '>>', tile_id
                     hq_tile = Image.open(tile_open_path)
-                    tiles_saved = tiles_saved + zoomify_slice(hq_tile, hq_zoom_max, file_dir, min_zoom_level=hq_zoom_min, offset=(loop_row, loop_col))
-            
-            zoomify_order(meta_size, file_dir)
+                    zoomify_slice(hq_tile, hq_zoom_max, file_dir, min_zoom_level=hq_zoom_min, offset=hq_offset, tilesize=meta['TILESIZE'])
+            zoomify_lowres_composite(hq_zoom_min, hq_zoom_max, meta_size, file_dir)
+            tiles_moved = zoomify_order(meta_size, file_dir)
             #Set metadata attributes
             root.attrib.update({'WIDTH': root_read.attrib['WIDTH'],
                                'HEIGHT': root_read.attrib['WIDTH'],
@@ -150,25 +175,25 @@ def zoomify(path, output_dir):
 
         # Tile Generation
         max_zoom = max_zoom_level(big_image.size)
-        tiles_saved = zoomify_slice(big_image, max_zoom, file_dir)
-        zoomify_order(big_image.size, file_dir)
+        zoomify_slice(big_image, max_zoom, file_dir)
+        tiles_moved = zoomify_order(big_image.size, file_dir)
         
         #Set metadata attributes
         root.attrib.update({'WIDTH': str(big_image.size[0]),
                            'HEIGHT': str(big_image.size[1]),
                            })
     
-    root.attrib.update({'NUMTILES': str(tiles_saved),
+    root.attrib.update({'NUMTILES': str(tiles_moved),
                        'NUMIMAGES': str(1),
                        'VERSION': '1.8',
                        'TILESIZE': str(TILE_SIZE)
                        })
     tree = ET.ElementTree(root)
     tree.write(os.path.join(file_dir, METADATA_FILE))
-    print root.attrib['WIDTH']+'x'+root.attrib['HEIGHT']+' image saved as '+root.attrib['NUMTILES'], root.attrib['TILESIZE']+'px tiles in '+str(int(math.ceil(tiles_saved/TILES_PER_SUBDIR)))+' subdirectories'
+    print '>> '+root.attrib['WIDTH']+'x'+root.attrib['HEIGHT']+' image saved as '+root.attrib['NUMTILES'], root.attrib['TILESIZE']+'px tiles in '+str(int(math.ceil(float(root.attrib['NUMTILES'])/float(TILES_PER_SUBDIR))))+' subdirectories'
 
 def main():
-    parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments
+    parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments 
     parser.add_argument('-i', '--input', default=None,
                         help='Input file or direcory. Default is ')
     parser.add_argument('-o', '--output', default=None,
@@ -176,7 +201,7 @@ def main():
     args = parser.parse_args()
     INPUT_PATH = args.input
     OUTPUT_PATH = args.output
-
+    
     # Get directory names, make if they don't exist, check only one input file, get input file path
     directories = common.initialise_subdirs(['big_image', 'zoomify_tiles'])
     if INPUT_PATH is None:
@@ -187,7 +212,8 @@ def main():
         else:
             sys.exit('No valid input images.')
     else:
-        None
+        file_path = os.path.realpath(os.path.join(os.getcwd(), INPUT_PATH))
+        zoomify(file_path, directories[1])
     
 if __name__ == "__main__":
     main()

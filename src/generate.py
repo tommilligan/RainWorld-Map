@@ -213,7 +213,7 @@ def get_area_screenshot(area):
     
 def draw_map(region):
     print '>', region[1].upper()
-    print '> Calculating network'
+    print '>> Calculating network'
     area_cursor = conn.cursor()
     area_cursor.execute('SELECT key FROM areas WHERE region = ? ORDER BY key ASC', (region[0],))
     initial_area = area_cursor.fetchone()
@@ -301,11 +301,6 @@ def draw_map(region):
     
     # -------------above this lineisgood-------------------------------------------------------------------------------------------------------------------------------
     
-    print '> Making image'
-    '''
-    max_screenshot_ids = tuple([max(G.node, key=lambda key: G.node[key]['screenshot'].size[x]) for x in range(2)])
-    max_screenshot_dim = max([G.node[max_screenshot_ids[x]]['screenshot'].size[x] for x in range(2)])
-    '''
     # make image using positions given
     SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*NETWORK_SPACING)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
