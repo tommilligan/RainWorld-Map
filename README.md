@@ -13,10 +13,11 @@ The game devs are James Primate and [Joar Jakobsson](http://joarportfolio.com/)
 - Contribute to the [community wiki](http://rainworld.gamepedia.com/Rain_World_Wiki)
 
 ## View the map
-The current map is available to view [here](http://tommilligan.github.io/RainWorld-Map/map.html). Please note this a dev version, and is low resolution. Corrections and suggestions are welcomed - please get in touch via the email address on my GitHub profile.
+The current map is available to view [here](http://tommilligan.github.io/RainWorld-Map). Please note this a dev version, and is low resolution. Corrections and suggestions are welcomed - please get in touch via the email address on my GitHub profile.
 
 ## Build your own map
 __FAIR WARNING
+
 This code is under *extremely* active development and will probably be re-written several times. Don't expect *anything* you do now to work for very long.__
 
 ### Installation
@@ -52,7 +53,8 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
 - Implement adaptive colour palette for "seamless" (and new palette "easyread") depending on region
 - Generally improve colour palette system - maybe migrate to DB?
 - Look at circumnavigating size limit on image generation; options:
-    - C++ codebase? (probably not)
-    - Partial image writing after position generation?
+    - Partial image writing after position generation
+        - Only if over certain predicted size
         - Adapt zoomify.py to handle multiple large slices
         - Ensure slices written in easy-to-handle 256**n dimensions
+        - Add warning in output directory that file is not directly viewable

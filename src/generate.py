@@ -49,12 +49,18 @@ import common
 
 parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments
 parser.add_argument('-p', '--palette', default='default',
-                   help='Color palette and format options to use')
+                    help='Color palette and format options to use')
 parser.add_argument('-r', '--region',
-                   help='Region to render - default is all')
+                    help='Region to render - default is all')
+parser.add_argument('--world', default=False, action='store_true',
+                    help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
+parser.add_argument('--force', default=False, action='store_true',
+                    help='Force map to be created and saved as a single image file. May cause crash or instability')
 args = parser.parse_args()
 PALETTE = args.palette
 SPECIFIED_REGION = args.region
+WORLD_MAP = args.world
+FORCE_SINGLE = args.force
         
 directories = common.initialise_subdirs(['assets', 'big_image'])
 DB_LOCATION = common.get_db_path()
@@ -141,7 +147,7 @@ MISSING_SCRN_BG_COLOR = pal_get(pal_missing_scrn_bg_col)
 MISSING_SCRN_OVERLAY_COLOR = pal_get(pal_missing_scrn_overlay_col)
 MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
 
-
+DEFAULT_REGION = 'suburban'
 RAW_SCREENSHOT_SIZE = (1366, 768)
 IMAGE_SCALE_FACTOR = 0.25
 SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
@@ -159,6 +165,8 @@ DETAIL_LINE_WIDTH = int(pal_get(pal_detail_line)*IMAGE_SCALE_FACTOR)
 LABEL_LINE_HEIGHT = FONT_SIZE+6
 LABEL_LINE_OFFSET = int(FONT_SIZE/2)
 
+# A networkx object is used to hold all properties
+
 # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
 def label_line_topleft(scrn, x):
     return tuple([scrn[0]+(LABEL_LINE_OFFSET*x), scrn[1]-(LABEL_LINE_HEIGHT*x)])
@@ -167,13 +175,13 @@ def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
 
 def draw_network(draw, graph, position_dict, line_width, color):
-    '''Takes an ImageDraw object, and uses it to draw a network as held by a networkx graph object & a node keyed position dictonary'''
+    '''Takes an ImageDraw object, and uses it to draw a network as held by a networkx graph object & the node property 'position_dict' containing a (x,y) location tuple'''
     # Only draw if line_width > 0
     if line_width > 0:
         for edge in graph.edges():
-            draw.line([position_dict[edge[0]], position_dict[edge[1]]], fill=color, width=line_width)
+            draw.line([graph.node[edge[0]][position_dict], graph.node[edge[1]][position_dict]], fill=color, width=line_width)
         for node in graph.nodes():
-            draw.ellipse([tuple(position_dict[node][x]-line_width*2 for x in range(2)), tuple(position_dict[node][x]+line_width*2 for x in range(2))], fill=color, outline=color)
+            draw.ellipse([tuple(graph.node[node][position_dict][x]-line_width*2 for x in range(2)), tuple(graph.node[node][position_dict][x]+line_width*2 for x in range(2))], fill=color, outline=color)
     return None  
 
 def get_area_screenshot(area):
@@ -203,10 +211,11 @@ def draw_map(region):
     # Initialise graph, and add area with lowest id as the origin room
     G = nx.Graph()
     G.add_node(initial_area[0])
+    G.node[initial_area[0]]['pos_rough'] = (0, 0)
     pos_rough = {initial_area[0]: (0, 0)}
     pos_to_expand = [initial_area[0]]
-    # for each area in pos list
-    #for area, position in pos_rough.iteritems():
+    
+    # as areas are found, add them to a list to be searched, and search them
     while len(pos_to_expand) > 0:
         # Order in which area initial positions are calculated
         if MODE[0] == 0:
@@ -215,22 +224,24 @@ def draw_map(region):
             area = pos_to_expand.pop()
         else:
             sys.exit('Invalid MODE specified')
+        
+        # for each linking area (SQL lookup)
         node_cursor = conn.cursor()
         node_cursor.execute('SELECT x_pos, y_pos, link_key FROM nodes WHERE area = ? ORDER BY key ASC', (area,))
-        # for each linking area (SQL lookup)
         for node in node_cursor:
-            # look up connecting node id -> area id
+            # look up link_node key (and link_node's area key)
             link_cursor = conn.cursor()
             link_cursor.execute('SELECT x_pos, y_pos, area FROM nodes WHERE key = ?', (node[2],))
             link_node = link_cursor.fetchone()
-            #if link node is specified and exists
+            #if link_node is specified and exists
             if link_node:
-                # if linking area not in pos list
+                # if link_node's area key not in pos list
                 if link_node[2] not in pos_rough:
                     # add to graph as node
                     G.add_node(area)
-                    # calculate an initial position for room from initial room
+                    # calculate a relative position for new area from initial area
                     relative_px = tuple(node[x]-link_node[x] for x in range(2))
+                    # store this as as an absolute set of coordinates
                     absolute_px = tuple(pos_rough[area][x]+relative_px[x] for x in range(2))
                     # add room to pos list (key, (x_pos, y_pos))
                     pos_rough.update({link_node[2] : absolute_px})
@@ -238,26 +249,32 @@ def draw_map(region):
                     link_cursor = conn.cursor()
                     link_cursor.execute('SELECT region FROM areas WHERE key = ?', (link_node[2],))
                     link_region = link_cursor.fetchone()
-                    if link_region[0] == region[0]:
+                    if (link_region[0] == region[0]) and (WORLD_MAP is False):
                         pos_to_expand.append(link_node[2])
+                        
+                    # >>> move other dict storage to here? make later code more readable and logical
+                        
+                # if link_node's area key is in pos list, it is already scheduled to be searched
                 else:
                     None
-                # add edge whether area already has position or not
+                # add edge whether area already has position set
                 G.add_edge(area, link_node[2])
 
-                # continuous spring adjustment during addition
+                # OPTIONAL continuous spring adjustment during addition
                 if MODE[1] == 1:
                     pos_rough = nx.spring_layout(G, pos=pos_rough)
                 else:
                     None
     
+    
     pos_spring = {}
     if MODE[1] == 2:
         # do not optimise
-        # max value of both dimensions in rough layout
+        # max & min value of both dimensions in rough layout
         pos_rough_max =  max([max(pos_rough.values(), key=lambda x: x[d])[d] for d in range(2)])
         pos_rough_min =  min([min(pos_rough.values(), key=lambda x: x[d])[d] for d in range(2)])
         pos_rough_range = float(pos_rough_max-pos_rough_min)
+        # scale to 0-1 space in both dimensions
         for key, pos in pos_rough.iteritems():
             pos_spring.update({key: tuple([float(pos[d]-pos_rough_min)/pos_rough_range for d in range(2)])})
     else:
@@ -269,22 +286,26 @@ def draw_map(region):
             # WARNING pos_spring generates a numpy based FutureWarning
             pos_spring = nx.spring_layout(G, pos=pos_rough, k=opt_dist)
     
+    # pull pos_spring optimised values into networkx object
+    for key in G.nodes():
+        G.node[key]['pos_spring'] = pos_spring[key]
+    
     print '> Making image'
     # make image using positions given
     SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*NETWORK_SPACING)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
-    image_origin = tuple(math.floor(image_size_init[x]/2) for x in range(2))
-    # scale up coords to image size and centre (origin)
-    pos_px = {key: tuple(math.floor((pos[x]-0.5)*SCALE)+image_origin[x]
-              for x in range(2))
-              for key, pos in pos_spring.iteritems()
-              }
+    image_origin = tuple(int(math.floor(image_size_init[x]/2)) for x in range(2))
+
+    # convert pos_spring (0-1 space) to image space (px)
+    for key in G.nodes():
+        G.node[key]['pos_px'] = tuple(math.floor((G.node[key]['pos_spring'][x]-0.5)*SCALE)+image_origin[x] for x in range(2))
     
     # New image errors above arbitrary size. 
     # Tested at (22454, 20454) 459274116 pixels
-    est_px = image_size_init[0]*image_size_init[1]
+    est_px = image_size_init[0]*image_size_init[1] #For printing only
     print '>> Properties:', image_size_init, est_px, 'pixels'
     print '>> Estimated uncompressed size:', float(est_px*4)/float(1024**3), 'GB'
+    
     with warnings.catch_warnings():
         # WARNING Image.new generates a DecompressionBomb warning with large file sizes
         warnings.simplefilter("ignore")
@@ -299,28 +320,22 @@ def draw_map(region):
     '''
     print '>> Pasting areas'
     #initialised detailed node graph for position collection
-    H = nx.Graph()
-    pos_detail_px = {}
-    
-    #initialise other dicts
-    area_name_dict = {}
-    area_type_dict = {}
-    pos_topleft_px = {}
-    
-    for key, pos in pos_px.iteritems():
+    H = nx.Graph()    
+    for key in G.nodes():
+        pos = G.node[key]['pos_px']
         label_cursor = conn.cursor()
         label_cursor.execute('SELECT name, type FROM areas WHERE key = ?', (key,))
         label = label_cursor.fetchone()
         label_name = label[0].upper()
         #name added to dict for later
-        area_name_dict.update({key: label_name})
+        G.node[key]['name'] = label_name
         print '>>> Area', key, label_name
         
         screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
         screenshot = get_area_screenshot(key)
         screenshot_topleft = tuple(int(math.floor(pos[x]-screenshot.size[x]/2)) for x in range(2))
         #topleft coordinate added to dict for later
-        pos_topleft_px.update({key: screenshot_topleft})
+        G.node[key]['pos_topleft_px'] = screenshot_topleft
         
         #add screenshot to composite image
         big_image.paste(screenshot, box=screenshot_topleft)
@@ -335,7 +350,7 @@ def draw_map(region):
                 H.add_node(node[3])
                 node_pos = tuple([pos[x]+node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
                 #save to node keyed dict to draw later
-                pos_detail_px.update({node[3]: node_pos})
+                H.node[node[3]]['pos_detail_px'] = node_pos
                 # look up connecting node id -> area id
                 link_cursor = conn.cursor()
                 link_cursor.execute('SELECT x_pos, y_pos, area FROM nodes WHERE key = ?', (node[2],))
@@ -344,48 +359,51 @@ def draw_map(region):
                 if link_node:
                     H.add_node(node[2])
                     H.add_edge(node[2], node[3])
-                    link_area_pos = pos_px[link_node[2]]
+                    link_area_pos = G.node[link_node[2]]['pos_px']
                     link_node_pos = tuple([link_area_pos[x]+link_node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
                     #save to node keyed dict to draw later
-                    pos_detail_px.update({node[2]: link_node_pos})
+                    H.node[node[2]]['pos_detail_px'] = link_node_pos
                 
         # if room has type, save for later
         if label[1]:
-            area_type_dict.update({key: label[1]})
+            G.node[key]['type'] = label[1]
         else:
-            None
+            G.node[key]['type'] = None
     
     print '>> Drawing extras'
     #draw skeleton edges
-    draw_network(big_draw, G, pos_px, SKELETON_LINE_WIDTH, SKELETON_COLOR)
+    draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, SKELETON_COLOR)
            
     #draw detail edges
-    draw_network(big_draw, H, pos_detail_px, DETAIL_LINE_WIDTH, DETAIL_COLOR)
+    draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, DETAIL_COLOR)
     
     #draw titles
-    for key, text in area_name_dict.iteritems():
-        if PALETTE == 'debug':
-            text = text+' ('+str(key)+')'
-        big_draw.text(label_line_topleft(pos_topleft_px[key], 1), text, font=font, fill=TITLE_COLOR)
-        
-    #draw labels and icons
-    for key, text in area_type_dict.iteritems():
-        label_list = sorted(text.split(), reverse=True)
-        label_text = str('/'.join(label_list)+' room').upper()
-        big_draw.text(label_line_topleft(pos_topleft_px[key], 2), label_text, font=font, fill=SUBTITLE_COLOR)
-        label_col_current_height = 0
-        for label in label_list:
-            # Load icon mask
-            label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
-            if os.path.isfile(label_path):
-                label_mask = Image.open(label_path)
-                label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
-                label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
-                # Centre labels and add padding
-                label_topleft = tuple([int(pos_topleft_px[key][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0])), int(pos_topleft_px[key][1]+label_col_current_height+LABEL_IMAGE_SPACING)])
-                big_image.paste(label_image, box=label_topleft, mask=label_mask)
-                label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
+    for key in G.nodes():
+        if G.node[key]['name']:
+            text = G.node[key]['name']
+            if PALETTE == 'debug':
+                text = text+' ('+str(key)+')'
+            big_draw.text(label_line_topleft(G.node[key]['pos_topleft_px'], 1), text, font=font, fill=TITLE_COLOR)
     
+    #draw labels and icons
+    for key in G.nodes():
+        if G.node[key]['type']:
+            label_list = sorted(G.node[key]['type'].split(), reverse=True)
+            label_text = str('/'.join(label_list)+' room').upper()
+            big_draw.text(label_line_topleft(G.node[key]['pos_topleft_px'], 2), label_text, font=font, fill=SUBTITLE_COLOR)
+            label_col_current_height = 0
+            for label in label_list:
+                # Load icon mask
+                label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
+                if os.path.isfile(label_path):
+                    label_mask = Image.open(label_path)
+                    label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
+                    label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
+                    # Centre labels and add padding
+                    label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0])), int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)])
+                    big_image.paste(label_image, box=label_topleft, mask=label_mask)
+                    label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
+        
     # save
     print '>> Saving'
     big_image_path = os.path.join(directories[1], region[1]+'.png')
@@ -394,7 +412,9 @@ def draw_map(region):
 
 conn = sqlite3.connect(DB_LOCATION)
 region_cursor = conn.cursor()
-if SPECIFIED_REGION:
+if SPECIFIED_REGION or WORLD_MAP:
+    if not SPECIFIED_REGION:
+        SPECIFIED_REGION = DEFAULT_REGION
     region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
     region = region_cursor.fetchone()
     if region:
