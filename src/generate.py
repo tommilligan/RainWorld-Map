@@ -36,6 +36,7 @@ import math
 import sys
 import warnings
 import argparse
+import xml.etree.ElementTree as ET
 
 import common
 
@@ -52,6 +53,8 @@ parser.add_argument('-p', '--palette', default='default',
                     help='Color palette and format options to use')
 parser.add_argument('-r', '--region',
                     help='Region to render - default is all')
+parser.add_argument('-s', '--scale', default=1.0, type=float,
+                    help='Option to scale image (1.0 is actual, 0.5 is half size)')
 parser.add_argument('--world', default=False, action='store_true',
                     help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
 parser.add_argument('--force', default=False, action='store_true',
@@ -61,6 +64,7 @@ PALETTE = args.palette
 SPECIFIED_REGION = args.region
 WORLD_MAP = args.world
 FORCE_SINGLE = args.force
+IMAGE_SCALE_FACTOR = args.scale
         
 directories = common.initialise_subdirs(['assets', 'big_image'])
 DB_LOCATION = common.get_db_path()
@@ -148,8 +152,8 @@ MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png'
 
 DEFAULT_REGION = 'suburban'
 RAW_SCREENSHOT_SIZE = (1366, 768)
-HQ_TILE_LIMIT = 8192
-IMAGE_SCALE_FACTOR = 0.25
+HQ_TILE_LEVEL = int(5)
+HQ_TILE_SIZE = 256*2**HQ_TILE_LEVEL
 SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
 ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)])
 NETWORK_CONTRACTION = 3 # Changes style of network # 2.2 works
@@ -166,6 +170,8 @@ LABEL_LINE_HEIGHT = FONT_SIZE+6
 LABEL_LINE_OFFSET = int(FONT_SIZE/2)
 FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
 font = ImageFont.truetype(font=FONT_PATH, size=FONT_SIZE)
+METADATA_FILE = 'ImageProperties.xml'
+
 
 # A networkx object is used to hold all properties
 
@@ -363,14 +369,14 @@ def draw_map(region):
     common.make_dir_if_not_found(region_dir)
     
     #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
-    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_LIMIT))) for x in range(2)])
+    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
     #row strips
     for row in range(images_required[1]):
         #col strips
         for col in range(images_required[0]):
             hq_name = 'hq-'+str(col)+'-'+str(row)+'.png'
-            hq_position = tuple([HQ_TILE_LIMIT*col, HQ_TILE_LIMIT*row])
-            hq_spec = ([min(hq_position[x]+HQ_TILE_LIMIT, image_size_init[x])-hq_position[x] for x in range(2)])
+            hq_position = tuple([HQ_TILE_SIZE*col, HQ_TILE_SIZE*row])
+            hq_spec = ([min(hq_position[x]+HQ_TILE_SIZE, image_size_init[x])-hq_position[x] for x in range(2)])
             with warnings.catch_warnings():
                 # WARNING Image.new generates a DecompressionBomb warning with large file sizes
                 warnings.simplefilter("ignore")
@@ -423,13 +429,22 @@ def draw_map(region):
             print '>> Saving', hq_name
             big_image_path = os.path.join(region_dir, hq_name)
             big_image.save(big_image_path, quality=100)
+    
+    # Write XML metadata file
+    root = ET.Element('IMAGE_PROPERTIES')
+    root.attrib = {'WIDTH': str(image_size_init[0]),
+                   'HEIGHT': str(image_size_init[1]),
+                   'NUMTILES': str(images_required[0]*images_required[1]),
+                   'NUMIMAGES': str(1),
+                   'TILESIZE': str(HQ_TILE_SIZE)
+                   }
+    tree = ET.ElementTree(root)
+    tree.write(os.path.join(region_dir, METADATA_FILE))
     return None
 
 conn = sqlite3.connect(DB_LOCATION)
 region_cursor = conn.cursor()
 if SPECIFIED_REGION or WORLD_MAP:
-    if not SPECIFIED_REGION:
-        SPECIFIED_REGION = DEFAULT_REGION
     region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
     region = region_cursor.fetchone()
     if region:
