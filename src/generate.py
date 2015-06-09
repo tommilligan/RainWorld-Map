@@ -138,7 +138,6 @@ pal_icon_scale = {'default': 1.0, 'debug': 3.0}
 BACKGROUND_COLOR = pal_get(pal_background_col)
 SKELETON_COLOR = pal_get(pal_skeleton_col)
 DETAIL_COLOR = pal_get(pal_detail_col)
-FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
 TITLE_COLOR = pal_get(pal_title_col)
 SUBTITLE_COLOR = pal_get(pal_subtitle_col)
 LABEL_IMAGE_COLOR = SUBTITLE_COLOR
@@ -149,6 +148,7 @@ MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png'
 
 DEFAULT_REGION = 'suburban'
 RAW_SCREENSHOT_SIZE = (1366, 768)
+HQ_TILE_LIMIT = 8192
 IMAGE_SCALE_FACTOR = 0.25
 SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
 ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)])
@@ -164,6 +164,8 @@ DETAIL_LINE_WIDTH = int(pal_get(pal_detail_line)*IMAGE_SCALE_FACTOR)
 
 LABEL_LINE_HEIGHT = FONT_SIZE+6
 LABEL_LINE_OFFSET = int(FONT_SIZE/2)
+FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
+font = ImageFont.truetype(font=FONT_PATH, size=FONT_SIZE)
 
 # A networkx object is used to hold all properties
 
@@ -174,14 +176,18 @@ def label_line_topleft(scrn, x):
 def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
 
-def draw_network(draw, graph, position_dict, line_width, color):
+def draw_network(draw, graph, position_dict, line_width, color, hq_position=(0, 0)):
     '''Takes an ImageDraw object, and uses it to draw a network as held by a networkx graph object & the node property 'position_dict' containing a (x,y) location tuple'''
     # Only draw if line_width > 0
     if line_width > 0:
         for edge in graph.edges():
-            draw.line([graph.node[edge[0]][position_dict], graph.node[edge[1]][position_dict]], fill=color, width=line_width)
+            adj_start = tuple([graph.node[edge[0]][position_dict][x]-hq_position[x] for x in range(2)])
+            adj_fin = tuple([graph.node[edge[1]][position_dict][x]-hq_position[x] for x in range(2)])
+            draw.line([adj_start, adj_fin], fill=color, width=line_width)
         for node in graph.nodes():
-            draw.ellipse([tuple(graph.node[node][position_dict][x]-line_width*2 for x in range(2)), tuple(graph.node[node][position_dict][x]+line_width*2 for x in range(2))], fill=color, outline=color)
+            adj_tl = tuple(graph.node[node][position_dict][x]-hq_position[x]-line_width*2 for x in range(2))
+            adj_br = tuple(graph.node[node][position_dict][x]-hq_position[x]+line_width*2 for x in range(2))
+            draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
     return None  
 
 def get_area_screenshot(area):
@@ -252,8 +258,6 @@ def draw_map(region):
                     if (link_region[0] == region[0]) and (WORLD_MAP is False):
                         pos_to_expand.append(link_node[2])
                         
-                    # >>> move other dict storage to here? make later code more readable and logical
-                        
                 # if link_node's area key is in pos list, it is already scheduled to be searched
                 else:
                     None
@@ -265,7 +269,6 @@ def draw_map(region):
                     pos_rough = nx.spring_layout(G, pos=pos_rough)
                 else:
                     None
-    
     
     pos_spring = {}
     if MODE[1] == 2:
@@ -290,55 +293,37 @@ def draw_map(region):
     for key in G.nodes():
         G.node[key]['pos_spring'] = pos_spring[key]
     
+    # -------------above this lineisgood-------------------------------------------------------------------------------------------------------------------------------
+    
     print '> Making image'
+    '''
+    max_screenshot_ids = tuple([max(G.node, key=lambda key: G.node[key]['screenshot'].size[x]) for x in range(2)])
+    max_screenshot_dim = max([G.node[max_screenshot_ids[x]]['screenshot'].size[x] for x in range(2)])
+    '''
     # make image using positions given
     SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*NETWORK_SPACING)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
-    image_origin = tuple(int(math.floor(image_size_init[x]/2)) for x in range(2))
 
     # convert pos_spring (0-1 space) to image space (px)
+    image_origin = tuple(int(math.floor(image_size_init[x]/2)) for x in range(2))
     for key in G.nodes():
         G.node[key]['pos_px'] = tuple(math.floor((G.node[key]['pos_spring'][x]-0.5)*SCALE)+image_origin[x] for x in range(2))
     
-    # New image errors above arbitrary size. 
-    # Tested at (22454, 20454) 459274116 pixels
-    est_px = image_size_init[0]*image_size_init[1] #For printing only
-    print '>> Properties:', image_size_init, est_px, 'pixels'
-    print '>> Estimated uncompressed size:', float(est_px*4)/float(1024**3), 'GB'
-    
-    with warnings.catch_warnings():
-        # WARNING Image.new generates a DecompressionBomb warning with large file sizes
-        warnings.simplefilter("ignore")
-        big_image = Image.new('RGBA', image_size_init, color=BACKGROUND_COLOR)
-    big_draw = ImageDraw.Draw(big_image)
-    font = ImageFont.truetype(font=FONT_PATH, size=FONT_SIZE)
-    #DEPRECATED font = ImageFont.load_default()
-    
-    # draw nodes
-    '''
-    look at scale|spring k value for overlapping nodes?
-    '''
-    print '>> Pasting areas'
     #initialised detailed node graph for position collection
-    H = nx.Graph()    
+    H = nx.Graph()
+    
+    #Read data from database and image files into networkx object for later drawing
     for key in G.nodes():
         pos = G.node[key]['pos_px']
         label_cursor = conn.cursor()
         label_cursor.execute('SELECT name, type FROM areas WHERE key = ?', (key,))
         label = label_cursor.fetchone()
-        label_name = label[0].upper()
-        #name added to dict for later
-        G.node[key]['name'] = label_name
-        print '>>> Area', key, label_name
+        G.node[key]['name'] = label[0].upper()
+        print '>>> Area', key, G.node[key]['name']
         
         screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
-        screenshot = get_area_screenshot(key)
-        screenshot_topleft = tuple(int(math.floor(pos[x]-screenshot.size[x]/2)) for x in range(2))
-        #topleft coordinate added to dict for later
-        G.node[key]['pos_topleft_px'] = screenshot_topleft
-        
-        #add screenshot to composite image
-        big_image.paste(screenshot, box=screenshot_topleft)
+        G.node[key]['screenshot'] = get_area_screenshot(key)
+        G.node[key]['pos_topleft_px'] = tuple(int(math.floor(pos[x]-G.node[key]['screenshot'].size[x]/2)) for x in range(2))
         
         #detail edges added to graph & dict objects to be drawn later
         node_cursor = conn.cursor()
@@ -349,7 +334,6 @@ def draw_map(region):
                 #add node to detailed graph and store position
                 H.add_node(node[3])
                 node_pos = tuple([pos[x]+node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
-                #save to node keyed dict to draw later
                 H.node[node[3]]['pos_detail_px'] = node_pos
                 # look up connecting node id -> area id
                 link_cursor = conn.cursor()
@@ -361,53 +345,84 @@ def draw_map(region):
                     H.add_edge(node[2], node[3])
                     link_area_pos = G.node[link_node[2]]['pos_px']
                     link_node_pos = tuple([link_area_pos[x]+link_node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
-                    #save to node keyed dict to draw later
-                    H.node[node[2]]['pos_detail_px'] = link_node_pos
-                
-        # if room has type, save for later
+                    H.node[node[2]]['pos_detail_px'] = link_node_pos        
+        # save room type
         if label[1]:
             G.node[key]['type'] = label[1]
         else:
             G.node[key]['type'] = None
     
-    print '>> Drawing extras'
-    #draw skeleton edges
-    draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, SKELETON_COLOR)
-           
-    #draw detail edges
-    draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, DETAIL_COLOR)
+    #Drawing
+    # New image errors above arbitrary size. 
+    # Tested at (22454, 20454) 459274116 pixels
+    est_px = image_size_init[0]*image_size_init[1] #For printing only
+    print '>> Properties:', image_size_init, est_px, 'pixels'
+    print '>> Estimated uncompressed size:', float(est_px*4)/float(1024**3), 'GB'
     
-    #draw titles
-    for key in G.nodes():
-        if G.node[key]['name']:
-            text = G.node[key]['name']
-            if PALETTE == 'debug':
-                text = text+' ('+str(key)+')'
-            big_draw.text(label_line_topleft(G.node[key]['pos_topleft_px'], 1), text, font=font, fill=TITLE_COLOR)
+    region_dir = os.path.join(directories[1], region[1])
+    common.make_dir_if_not_found(region_dir)
     
-    #draw labels and icons
-    for key in G.nodes():
-        if G.node[key]['type']:
-            label_list = sorted(G.node[key]['type'].split(), reverse=True)
-            label_text = str('/'.join(label_list)+' room').upper()
-            big_draw.text(label_line_topleft(G.node[key]['pos_topleft_px'], 2), label_text, font=font, fill=SUBTITLE_COLOR)
-            label_col_current_height = 0
-            for label in label_list:
-                # Load icon mask
-                label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
-                if os.path.isfile(label_path):
-                    label_mask = Image.open(label_path)
-                    label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
-                    label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
-                    # Centre labels and add padding
-                    label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0])), int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)])
-                    big_image.paste(label_image, box=label_topleft, mask=label_mask)
-                    label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
-        
-    # save
-    print '>> Saving'
-    big_image_path = os.path.join(directories[1], region[1]+'.png')
-    big_image.save(big_image_path, quality=100)
+    #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
+    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_LIMIT))) for x in range(2)])
+    #row strips
+    for row in range(images_required[1]):
+        #col strips
+        for col in range(images_required[0]):
+            hq_name = 'hq-'+str(col)+'-'+str(row)+'.png'
+            hq_position = tuple([HQ_TILE_LIMIT*col, HQ_TILE_LIMIT*row])
+            hq_spec = ([min(hq_position[x]+HQ_TILE_LIMIT, image_size_init[x])-hq_position[x] for x in range(2)])
+            with warnings.catch_warnings():
+                # WARNING Image.new generates a DecompressionBomb warning with large file sizes
+                warnings.simplefilter("ignore")
+                big_image = Image.new('RGBA', hq_spec, color=BACKGROUND_COLOR)
+            big_draw = ImageDraw.Draw(big_image)
+            
+            #composite screenshots onto image
+            for key in G.nodes():
+                if G.node[key]['name']:
+                    box_adj = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
+                    big_image.paste(G.node[key]['screenshot'], box=box_adj)
+            
+            #draw skeleton edges
+            draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, SKELETON_COLOR, hq_position=hq_position)
+                   
+            #draw detail edges
+            draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, DETAIL_COLOR, hq_position=hq_position)
+            
+            #draw titles
+            for key in G.nodes():
+                if G.node[key]['name']:
+                    text = G.node[key]['name']
+                    if PALETTE == 'debug':
+                        text = text+' ('+str(key)+')'
+                    adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
+                    big_draw.text(label_line_topleft(adj_topleft_px, 1), text, font=font, fill=TITLE_COLOR)
+            
+            #draw labels and icons
+            for key in G.nodes():
+                if G.node[key]['type']:
+                    label_list = sorted(G.node[key]['type'].split(), reverse=True)
+                    label_text = str('/'.join(label_list)+' room').upper()
+                    adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
+                    big_draw.text(label_line_topleft(adj_topleft_px, 2), label_text, font=font, fill=SUBTITLE_COLOR)
+                    label_col_current_height = 0
+                    for label in label_list:
+                        # Load icon mask
+                        label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
+                        if os.path.isfile(label_path):
+                            label_mask = Image.open(label_path)
+                            
+                            label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
+                            label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
+                            # Centre labels and add padding
+                            label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)-hq_position[1]])
+                            big_image.paste(label_image, box=label_topleft, mask=label_mask)
+                            label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
+              
+            # save
+            print '>> Saving', hq_name
+            big_image_path = os.path.join(region_dir, hq_name)
+            big_image.save(big_image_path, quality=100)
     return None
 
 conn = sqlite3.connect(DB_LOCATION)
