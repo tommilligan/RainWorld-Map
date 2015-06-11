@@ -2,6 +2,7 @@
 <head>
 <!-- Site stylesheet -->
 <link rel="stylesheet" type="text/css" href="assets/RainWorld-Map.css" />
+<script type='text/javascript' src='scripts/common.js'></script>
 <!-- Google Analytics --><script>
   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
   (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
@@ -31,21 +32,25 @@ html, body, #map {
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
 <script type='text/javascript'>
+// Get region from GET variable
+var region = GetURLParameter('region');
 
 // Get data about image from XML
-src_dir = 'map_tiles/';
-src_meta = src_dir+'ImageProperties.xml';
+var src_dir = 'map_tiles/'+region+'/';
+var src_meta = src_dir+'ImageProperties.xml';
+var src_init = src_dir+'LeafletInit.xml';
 var xmlDoc = $.ajax({type: "GET", url: src_meta, async: false}).responseText;
+var xmlInit = $.ajax({type: "GET", url: src_init, async: false}).responseText;
 
 // Make leaflet viewer
 var map = L.map('map').setView([0, 0], 0);
 L.tileLayer.zoomify(src_dir, {
-    width: $(xmlDoc).attr('WIDTH'),
-    height: $(xmlDoc).attr('HEIGHT'),
+    width: parseInt($(xmlDoc).attr('WIDTH'), 10),
+    height: parseInt($(xmlDoc).attr('HEIGHT'), 10),
     tolerance: 0.8,
     attribution: '<a href="http://forums.tigsource.com/index.php?topic=25183.0">Rain World</a> alpha 150303'
 }).addTo(map);
-map.panBy([103, 79]);
-map.zoomIn(4);
+map.panBy([parseInt($(xmlInit).attr('INIT_X'), 10), parseInt($(xmlInit).attr('INIT_Y'), 10)]);
+map.zoomIn(parseInt($(xmlInit).attr('INIT_Z'), 10));
 </script>
 </body>
