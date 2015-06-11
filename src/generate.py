@@ -299,8 +299,6 @@ def draw_map(region):
     for key in G.nodes():
         G.node[key]['pos_spring'] = pos_spring[key]
     
-    # -------------above this lineisgood-------------------------------------------------------------------------------------------------------------------------------
-    
     # make image using positions given
     SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*NETWORK_SPACING)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
@@ -320,7 +318,7 @@ def draw_map(region):
         label_cursor.execute('SELECT name, type FROM areas WHERE key = ?', (key,))
         label = label_cursor.fetchone()
         G.node[key]['name'] = label[0].upper()
-        print '>>> Area', key, G.node[key]['name']
+        #print '>>> Area', key, G.node[key]['name']
         
         screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
         G.node[key]['screenshot'] = get_area_screenshot(key)
@@ -354,17 +352,14 @@ def draw_map(region):
             G.node[key]['type'] = None
     
     #Drawing
-    # New image errors above arbitrary size. 
-    # Tested at (22454, 20454) 459274116 pixels
-    est_px = image_size_init[0]*image_size_init[1] #For printing only
-    print '>> Properties:', image_size_init, est_px, 'pixels'
-    print '>> Estimated uncompressed size:', float(est_px*4)/float(1024**3), 'GB'
+    # New image errors above arbitrary size (OS limit on single process memory ~2gb)
+    #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
+    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
+    print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1]), '. Splitting to', images_required[0]+images_required[1], 'hq image tiles' 
     
     region_dir = os.path.join(directories[1], region[1])
     common.make_dir_if_not_found(region_dir)
     
-    #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
-    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
     #row strips
     for row in range(images_required[1]):
         #col strips

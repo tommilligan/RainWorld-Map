@@ -17,6 +17,12 @@ TILES_PER_SUBDIR = int(256)
 TILE_SUBDIR_PREFIX = 'TileGroup'
 METADATA_FILE = 'ImageProperties.xml'
 
+def zoom_level_max_tiles(zoom_level):
+    return zoom_level**2
+    
+def zoom_level_max_px(zoom_level):
+    return zoom_level_max_tiles(zoom_level)*TILE_SIZE
+
 def divisions_required(total_length, sub_length):
     precise = total_length/sub_length
     if total_length%sub_length == 0:
@@ -64,7 +70,7 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
         offset is used to indicate the position of this slice in directory processing'''
     #Zoom level
     for loop_zoom in xrange(min_zoom_level, int(max_zoom_level)):
-        #DUBUG! if loop_zoom > 3: continue
+        #DUBUG! if loop_zoom > 3: continue 
         area_size_multiplier = 2**(max_zoom_level-1-loop_zoom)
         area_side_length = TILE_SIZE*area_size_multiplier
         rows_required = divisions_required(big_image.size[1], area_side_length)
@@ -98,10 +104,11 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
 def zoomify_lowres_composite(min_zoom_level, max_zoom_level, image_size, output_dir):
     '''Designed to provide low-res composites of the lower level zoom levels, from previously generated .jpg tiles in the layer below (only for directory processing'''
     print '>> Adding low-res preview tiles'
-    area_size_multiplier = 2**(min_zoom_level)
-    area_side_length = TILE_SIZE*area_size_multiplier
+    # Area length max of min_zoom_level
+    area_side_length = zoom_level_max_px(min_zoom_level)
     dim_required = divisions_required(area_side_length, TILE_SIZE)
-    canvas_size = tuple([int(image_size[x]/(2**(max_zoom_level-1-min_zoom_level))) for x in range(2)])
+    # Make canvas next zoom level down from the min_zoom_level already generated
+    canvas_size = tuple([int((image_size[x]/(2**max_zoom_level))*(2**(min_zoom_level+1))) for x in range(2)])
     canvas = Image.new('RGBA', canvas_size, color=(255, 255, 255))
     # Each row
     for loop_row in xrange(0, dim_required):
@@ -113,10 +120,8 @@ def zoomify_lowres_composite(min_zoom_level, max_zoom_level, image_size, output_
             except IOError:
                 None
             canvas.paste(lq, box=(loop_col*TILE_SIZE, loop_row*TILE_SIZE))
-        
-    lq_size_multiplier = 2**(min_zoom_level-1)
-    lq_size = tuple([canvas_size[x]/lq_size_multiplier for x in range(2)])
-    downscaled = canvas.resize(lq_size)
+    downscaled_size = tuple([int((image_size[x]/(2**max_zoom_level))*(2**(min_zoom_level))) for x in range(2)])
+    downscaled = canvas.resize(downscaled_size)
     zoomify_slice(downscaled, min_zoom_level, output_dir)
     return None
     
@@ -139,8 +144,11 @@ def zoomify(path, output_dir):
             rows = divisions_required(meta['HEIGHT'], meta['TILESIZE'])
             cols = divisions_required(meta['WIDTH'], meta['TILESIZE'])
             meta_size = tuple([meta['WIDTH'], meta['HEIGHT']])
+            # The max zoom needed to generate a single hq_tile at original resolution
             hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2)))
+            # The max zoom needed to generate the whole image at original resolution
             hq_zoom_max = max_zoom_level(meta_size)
+            # The zoom levels missing, that will need to be composited after initial zoomification needed to generate the whole image at original resolution
             hq_zoom_min = hq_zoom_max-hq_zoom_range
             '''add this as file prefix z_level? str(hq_zoom_level)'''
             # Each row
@@ -157,7 +165,7 @@ def zoomify(path, output_dir):
             tiles_moved = zoomify_order(meta_size, file_dir)
             #Set metadata attributes
             root.attrib.update({'WIDTH': root_read.attrib['WIDTH'],
-                               'HEIGHT': root_read.attrib['WIDTH'],
+                               'HEIGHT': root_read.attrib['HEIGHT'],
                                })
         else:
             print 'No metadata file found at', metadata_path
