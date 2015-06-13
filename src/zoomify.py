@@ -103,7 +103,7 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
 
 def zoomify_lowres_composite(min_zoom_level, max_zoom_level, image_size, output_dir):
     '''Designed to provide low-res composites of the lower level zoom levels, from previously generated .jpg tiles in the layer below (only for directory processing'''
-    print '>> Adding low-res preview tiles'
+    print '>> Adding low-res preview tiles from zoom layer', min_zoom_level
     # Area length max of min_zoom_level
     area_side_length = zoom_level_max_px(min_zoom_level)
     dim_required = divisions_required(area_side_length, TILE_SIZE)

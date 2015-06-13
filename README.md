@@ -52,9 +52,10 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
 ## Todo List
 - Implement adaptive colour palette for "seamless" (and new palette "easyread") depending on region
 - Generally improve colour palette system - maybe migrate to DB?
-- Look at circumnavigating size limit on image generation; options:
-    - Partial image writing after position generation
-        - Only if over certain predicted size
-        - Adapt zoomify.py to handle multiple large slices
-        - Ensure slices written in easy-to-handle 256**n dimensions
-        - Add warning in output directory that file is not directly viewable
+- ~~Look at circumnavigating size limit on image generation~~
+    - ~~Partial image writing after position generation~~
+        - ~~Only if over certain predicted size~~
+        - ~~Adapt zoomify.py to handle multiple large slices~~
+        - ~~Ensure slices written in easy-to-handle 256**n dimensions~~
+- ~~Store initial room in region db to enable easy seed generation~~
+    - Check for if this key stored is present in areas - if so, use, if not revert to asc order

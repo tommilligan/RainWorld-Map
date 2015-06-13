@@ -54,7 +54,11 @@ parser.add_argument('-p', '--palette', default='default',
 parser.add_argument('-r', '--region',
                     help='Region to render - default is all')
 parser.add_argument('-s', '--scale', default=1.0, type=float,
-                    help='Option to scale image (1.0 is actual, 0.5 is half size)')
+                    help='Scale final image (1.0 is actual, 0.5 is half size)')
+parser.add_argument('-k', '--k-value', default=3.0, type=float,
+                    help='Spring constant passed to the Fruchterman-Reingold algorithm. Changes network shape')
+parser.add_argument('-v', '--network-overlap', default=3.0, type=float,
+                    help='Increases spacing between nodes (after position optimisation)')
 parser.add_argument('--world', default=False, action='store_true',
                     help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
 parser.add_argument('--force', default=False, action='store_true',
@@ -65,6 +69,8 @@ SPECIFIED_REGION = args.region
 WORLD_MAP = args.world
 FORCE_SINGLE = args.force
 IMAGE_SCALE_FACTOR = args.scale
+NETWORK_CONTRACTION = args.k_value # -k spring Konstant # Changes style of network
+NETWORK_SPACING = args.network_overlap # -v network oVerlap # Changes distance between nodes
         
 directories = common.initialise_subdirs(['assets', 'big_image'])
 DB_LOCATION = common.get_db_path()
@@ -156,8 +162,6 @@ HQ_TILE_LEVEL = int(5)
 HQ_TILE_SIZE = 256*2**HQ_TILE_LEVEL
 SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
 ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)])
-NETWORK_CONTRACTION = 3 # Changes style of network # 2.2 works
-NETWORK_SPACING = 3 #WANT THIS BIGGER IF POSSIBLE! # 2.25 works
 IMAGE_PADDING = int(800*IMAGE_SCALE_FACTOR)
 LABEL_IMAGE_INSET = int(100*IMAGE_SCALE_FACTOR)
 LABEL_IMAGE_SPACING = int(20*IMAGE_SCALE_FACTOR)
@@ -211,21 +215,27 @@ def get_area_screenshot(area):
         to_return = to_return.resize(tuple([int(to_return.size[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)]))
     return to_return
     
-def draw_map(region):
+def draw_map(region_key):
+    region_cursor.execute('SELECT key, name, default_area FROM regions WHERE key = ?', (region_key,))
+    region = region_cursor.fetchone()
     print '>', region[1].upper()
     print '>> Calculating network'
-    area_cursor = conn.cursor()
-    area_cursor.execute('SELECT key FROM areas WHERE region = ? ORDER BY key ASC', (region[0],))
-    initial_area = area_cursor.fetchone()
-    if not initial_area:
-        print 'Region has no areas'
-        return None
+    initial_area = None
+    if region[2]:
+        initial_area = region[2]
+    else:
+        area_cursor = conn.cursor()
+        area_cursor.execute('SELECT key FROM areas WHERE region = ? ORDER BY key ASC', (region[0],))
+        initial_area = area_cursor.fetchone()[0]
+        if not initial_area:
+            print 'Region has no areas'
+            return False
     # Initialise graph, and add area with lowest id as the origin room
     G = nx.Graph()
-    G.add_node(initial_area[0])
-    G.node[initial_area[0]]['pos_rough'] = (0, 0)
-    pos_rough = {initial_area[0]: (0, 0)}
-    pos_to_expand = [initial_area[0]]
+    G.add_node(initial_area)
+    G.node[initial_area]['pos_rough'] = (0, 0)
+    pos_rough = {initial_area: (0, 0)}
+    pos_to_expand = [initial_area]
     
     # as areas are found, add them to a list to be searched, and search them
     while len(pos_to_expand) > 0:
@@ -261,8 +271,13 @@ def draw_map(region):
                     link_cursor = conn.cursor()
                     link_cursor.execute('SELECT region FROM areas WHERE key = ?', (link_node[2],))
                     link_region = link_cursor.fetchone()
-                    if (link_region[0] == region[0]) and (WORLD_MAP is False):
-                        pos_to_expand.append(link_node[2])
+                    if link_region:
+                        # If linked area is in same region OR world-map flag is set, add to list of areas to expand upon
+                        if (link_region[0] == region[0]) and (WORLD_MAP is False):
+                            pos_to_expand.append(link_node[2])
+                    else:
+                        print 'ERROR: Linked region '+str(link_node[2])+' not found in areas list'
+                        return False
                         
                 # if link_node's area key is in pos list, it is already scheduled to be searched
                 else:
@@ -355,7 +370,7 @@ def draw_map(region):
     # New image errors above arbitrary size (OS limit on single process memory ~2gb)
     #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
     images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
-    print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1]), '. Splitting to', images_required[0]+images_required[1], 'hq image tiles' 
+    print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(HQ_TILE_SIZE)+'x'+str(HQ_TILE_SIZE),'hq image tiles' 
     
     region_dir = os.path.join(directories[1], region[1])
     common.make_dir_if_not_found(region_dir)
@@ -435,13 +450,13 @@ def draw_map(region):
 conn = sqlite3.connect(DB_LOCATION)
 region_cursor = conn.cursor()
 if SPECIFIED_REGION or WORLD_MAP:
-    region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
+    region_cursor.execute('SELECT key FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
     region = region_cursor.fetchone()
     if region:
-        draw_map(region)
+        draw_map(region[0])
 else:
-    region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
+    region_cursor.execute('SELECT key FROM regions ORDER BY key ASC')
     regions = region_cursor.fetchall()
     # print region maps separately
     for region in regions:
-        draw_map(region)
+        draw_map(region[0])
