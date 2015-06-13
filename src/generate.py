@@ -92,68 +92,73 @@ PALETTE = string
 each color property is a dictionary with the palette name as keys, and must have a default
 e.g. dict = {'default': (0, 0, 0), 'debug': (255, 0, 0)}
 '''
+
+#palettes
 def pal_get(choices):
     if PALETTE in choices:
         return choices[PALETTE]
     else:
         return choices['default']
-
-#palettes
-pal_background_col = {
-            'default': (0, 0, 0),
-            'debug': (0, 31, 0),
-            'seamless': (26, 11, 32),
-            'neon': (16, 7, 19)
-            }
-pal_skeleton_col = {
-            'default': (255, 255, 255),
-            'debug': (255, 255, 0),
-            'neon': (255, 0, 102)
-            }
-pal_detail_col = {
-            'default': (255, 255, 255),
-            'debug': (255, 0, 0),
-            'seamless': (215, 207, 222),
-            'neon': (0, 102, 255)
-            }
-pal_title_col = {
-            'default': (255, 255, 255),
-            'neon': (255, 0, 102),
-            'seamless': (241, 17, 228)
-            }
-pal_subtitle_col = {
-            'default': (255, 255, 255),
-            'debug': (255, 63, 0),
-            'neon': (0, 255, 102),
-            'seamless': (131, 45, 118)
-            }
-pal_missing_scrn_bg_col = {
-            'default': (168, 255, 255),
-            'debug': (0, 255, 0),
-            'neon': pal_background_col['neon'],
-            'seamless': pal_background_col['seamless']
-            }
-pal_missing_scrn_overlay_col = {
-            'default': pal_missing_scrn_bg_col['default'],
-            'debug': (0, 0, 0),
-            'neon': pal_title_col['neon'],
-            'seamless': (255, 255, 255)
-            }
+            
 pal_skeleton_line = {'default': 0, 'debug': 6}
 pal_detail_line = {'default': 9, 'debug': 12}
 pal_font_size = {'default': 128, 'debug': 192}
 pal_icon_scale = {'default': 1.0, 'debug': 3.0}
-        
+
+def region_property(region_key, property):
+    conn = sqlite3.connect(DB_LOCATION)
+    region_cursor = conn.cursor()
+    region_cursor.execute('SELECT * FROM regions WHERE key = ?', (region_key,))
+    value = region_cursor.fetchone()
+    headers = region_cursor.description
+    for i, h in enumerate(headers):
+        if h[0] == property:
+            return value[i]
+
+def list_to_tuple(val_list):
+    val_tuple = tuple(int(x) for x in val_list.split())
+    return val_tuple
+            
+def generate_palette(region_key):
+    # Default palette
+    values = {'title': (255, 255, 255),
+              'bg': (0, 0, 0),
+              'detail': (100, 100, 100),
+              'skeleton': None,
+              'icon': (200, 200, 200),
+              'missing_screenshot_fg': (255, 255, 255)
+              }
+    # Derived values
+    values.update({'missing_screenshot_bg': values['bg']
+                   })
+    
+    # Overwrite defaults with new color schemes as required
+    if PALETTE == 'seamless':
+        # Get relevant values for each region from DB
+        values.update({'title': list_to_tuple(region_property(region_key, 'rgb_highlight')),
+                       'bg': list_to_tuple(region_property(region_key, 'rgb_edge')),
+                       'detail': list_to_tuple(region_property(region_key, 'rgb_bg')),
+                       'icon': list_to_tuple(region_property(region_key, 'rgb_lowlight'))
+                       })
+    elif PALETTE == 'neon':
+        values.update({'title': (255, 0, 102),
+                       'bg': tuple([int(float(x)/2) for x in list_to_tuple(region_property(region_key, 'rgb_edge'))]),
+                       'detail': (0, 102, 255),
+                       'icon': (0, 255, 102)
+                       })
+    elif PALETTE == 'debug':
+        values.update({'title': (0, 0, 0),
+                       'bg': (255, 255, 255),
+                       'detail': (255, 0, 0),
+                       'icon': (255, 63, 0),
+                       'missing_screenshot_bg': (0, 255, 0),
+                       'missing_screenshot_fg': (0, 0, 0),
+                       'skeleton': (255, 255, 0)
+                       })
+    return values
+     
 # even numbers are best
-BACKGROUND_COLOR = pal_get(pal_background_col)
-SKELETON_COLOR = pal_get(pal_skeleton_col)
-DETAIL_COLOR = pal_get(pal_detail_col)
-TITLE_COLOR = pal_get(pal_title_col)
-SUBTITLE_COLOR = pal_get(pal_subtitle_col)
-LABEL_IMAGE_COLOR = SUBTITLE_COLOR
 LABEL_IMAGE_DIR = os.path.join(directories[0], 'labels')
-MISSING_SCRN_BG_COLOR = pal_get(pal_missing_scrn_bg_col)
-MISSING_SCRN_OVERLAY_COLOR = pal_get(pal_missing_scrn_overlay_col)
 MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
 
 DEFAULT_REGION = 'suburban'
@@ -207,8 +212,8 @@ def get_area_screenshot(area):
         to_return = Image.open(screenshot_path)
     else:
         mask = Image.open(MISSING_SCRN_OVERLAY_PATH)
-        base = Image.new('RGBA', mask.size, color=MISSING_SCRN_BG_COLOR)
-        overlay = Image.new('RGBA', mask.size, color=MISSING_SCRN_OVERLAY_COLOR)
+        base = Image.new('RGBA', mask.size, color=image_palette['missing_screenshot_bg'])
+        overlay = Image.new('RGBA', mask.size, color=image_palette['missing_screenshot_fg'])
         base.paste(overlay, box=(0,0), mask=mask)
         to_return = base
     if SCREENSHOT_RESIZE_RATIO != 1.0:
@@ -216,6 +221,8 @@ def get_area_screenshot(area):
     return to_return
     
 def draw_map(region_key):
+    conn = sqlite3.connect(DB_LOCATION)
+    region_cursor = conn.cursor()
     region_cursor.execute('SELECT key, name, default_area FROM regions WHERE key = ?', (region_key,))
     region = region_cursor.fetchone()
     print '>', region[1].upper()
@@ -367,6 +374,7 @@ def draw_map(region_key):
             G.node[key]['type'] = None
     
     #Drawing
+    image_palette = generate_palette(region_key)
     # New image errors above arbitrary size (OS limit on single process memory ~2gb)
     #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
     images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
@@ -385,7 +393,7 @@ def draw_map(region_key):
             with warnings.catch_warnings():
                 # WARNING Image.new generates a DecompressionBomb warning with large file sizes
                 warnings.simplefilter("ignore")
-                big_image = Image.new('RGBA', hq_spec, color=BACKGROUND_COLOR)
+                big_image = Image.new('RGBA', hq_spec, color=image_palette['bg'])
             big_draw = ImageDraw.Draw(big_image)
             
             #composite screenshots onto image
@@ -394,11 +402,12 @@ def draw_map(region_key):
                     box_adj = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
                     big_image.paste(G.node[key]['screenshot'], box=box_adj)
             
-            #draw skeleton edges
-            draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, SKELETON_COLOR, hq_position=hq_position)
+            #draw skeleton edges if color specified in palette
+            if image_palette['skeleton']:
+                draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, image_palette['skeleton'], hq_position=hq_position)
                    
             #draw detail edges
-            draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, DETAIL_COLOR, hq_position=hq_position)
+            draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, image_palette['detail'], hq_position=hq_position)
             
             #draw titles
             for key in G.nodes():
@@ -407,7 +416,7 @@ def draw_map(region_key):
                     if PALETTE == 'debug':
                         text = text+' ('+str(key)+')'
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 1), text, font=font, fill=TITLE_COLOR)
+                    big_draw.text(label_line_topleft(adj_topleft_px, 1), text, font=font, fill=image_palette['title'])
             
             #draw labels and icons
             for key in G.nodes():
@@ -415,7 +424,7 @@ def draw_map(region_key):
                     label_list = sorted(G.node[key]['type'].split(), reverse=True)
                     label_text = str('/'.join(label_list)+' room').upper()
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 2), label_text, font=font, fill=SUBTITLE_COLOR)
+                    big_draw.text(label_line_topleft(adj_topleft_px, 2), label_text, font=font, fill=image_palette['icon'])
                     label_col_current_height = 0
                     for label in label_list:
                         # Load icon mask
@@ -424,7 +433,7 @@ def draw_map(region_key):
                             label_mask = Image.open(label_path)
                             
                             label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
-                            label_image = Image.new('RGB', label_mask.size, color=LABEL_IMAGE_COLOR) 
+                            label_image = Image.new('RGB', label_mask.size, color=image_palette['icon']) 
                             # Centre labels and add padding
                             label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)-hq_position[1]])
                             big_image.paste(label_image, box=label_topleft, mask=label_mask)
