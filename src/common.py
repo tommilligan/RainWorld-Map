@@ -3,6 +3,10 @@ import errno
 import shutil
 import sys
 
+def root_dir():
+    return os.path.dirname(os.path.realpath(os.path.join(sys.argv[0],'..')))
+
+
 def query_yes_no(question, default=None):
     """Ask a yes/no question via raw_input() and return their answer.
 
@@ -39,30 +43,45 @@ def make_dir_if_not_found(dir_path):
         os.makedirs(dir_path)
     return None
     
-def get_top_dir():
-    return os.path.dirname(os.path.realpath(os.path.join(sys.argv[0],'..')))
+def delete_dir(dir_path):
+    '''
+    True if successfully deleted
+    False if user abort
+    None if path not a directory
+    '''
+    if os.path.isdir(dir_path):
+        try:
+            os.rmdir(dir_path)
+        except OSError as ex:
+            if ex.errno == errno.ENOTEMPTY:
+                prompt = 'The directory "'+dir_path+'" is not empty. Proceeding will delete all files. Proceed?'
+                answer = query_yes_no(prompt, default=True)
+                if answer:
+                    shutil.rmtree(dir_path)
+                    return True
+                else:
+                    return False
+    return None
     
-def initialise_subdirs(dir_names):
-    if len(dir_names) == 2 and isinstance(dir_names, list):
-        TOP_DIR = get_top_dir()
-        directories = tuple([os.path.normpath(os.path.join(TOP_DIR, x)) for x in dir_names]) # Ruturns a list of 2: 0 is input, 1 is output
-        if os.path.isdir(directories[1]):
-            try:
-                os.rmdir(directories[1])
-            except OSError as ex:
-                if ex.errno == errno.ENOTEMPTY:
-                    prompt = 'The output directory "'+directories[1]+'" is not empty. Proceeding will delete all files. Proceed?'
-                    answer = query_yes_no(prompt, default=True)
-                    if answer:
-                        shutil.rmtree(directories[1])
-                    else:
-                        sys.exit('User aborted')
-                        
-        for dir_path in directories:
-            make_dir_if_not_found(dir_path)
-        return directories
+def renew_dir(dir_path):
+    '''
+    False if user abort
+    True if dir (re)created and is empty
+    '''
+    user_response = delete_dir(dir_path)
+    if user_response is False:
+        return False
     else:
-        sys.exit('Bad directories specified')
+        make_dir_if_not_found(dir_path)
+        return True
+    return None
+
+def initialise_subdirs(subdir_names):
+    '''Appends subdir names to the root directory, makes subdirs if they don't exist, and returns their absolute paths'''
+    dir_paths = tuple([os.path.normpath(os.path.join(root_dir(), x)) for x in subdir_names])
+    for dir_path in dir_paths:
+        make_dir_if_not_found(dir_path)
+    return dir_paths
     
 def get_db_path():
-    return os.path.join(get_top_dir(), 'assets', 'network.db')
+    return os.path.join(root_dir(), 'assets', 'network.db')

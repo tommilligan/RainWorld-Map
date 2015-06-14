@@ -12,7 +12,7 @@ import common
 
 TILE_SIZE = int(256)
 HQ_TILE_SIZE = int(8192)
-TOP_DIR = common.get_top_dir()
+TOP_DIR = common.root_dir()
 TILES_PER_SUBDIR = int(256)
 TILE_SUBDIR_PREFIX = 'TileGroup'
 METADATA_FILE = 'ImageProperties.xml'
@@ -136,7 +136,7 @@ def zoomify(path, output_dir):
         metadata_path = os.path.join(path, METADATA_FILE)
         if os.path.isfile(metadata_path):
             file_dir = os.path.join(output_dir, os.path.basename(os.path.normpath(path)))
-            common.make_dir_if_not_found(file_dir)
+            common.renew_dir(file_dir)
             tree_read = ET.parse(metadata_path)
             root_read = tree_read.getroot()
             # Trasform to integer values for use
@@ -203,12 +203,12 @@ def zoomify(path, output_dir):
 def main():
     parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments 
     parser.add_argument('-i', '--input', default=None,
-                        help='Input file or direcory. Default is ')
-    parser.add_argument('-o', '--output', default=None,
-                        help='Output direcory. Default is ')
+                        help='Input file or direcory. Default is all subdirs of big_image')
+    #parser.add_argument('-o', '--output', default=None,
+    #                    help='Output direcory. Default is ')
     args = parser.parse_args()
     INPUT_PATH = args.input
-    OUTPUT_PATH = args.output
+    #OUTPUT_PATH = args.output
     
     # Get directory names, make if they don't exist, check only one input file, get input file path
     directories = common.initialise_subdirs(['big_image', 'zoomify_tiles'])

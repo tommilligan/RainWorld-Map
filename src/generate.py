@@ -71,8 +71,10 @@ FORCE_SINGLE = args.force
 IMAGE_SCALE_FACTOR = args.scale
 NETWORK_CONTRACTION = args.k_value # -k spring Konstant # Changes style of network
 NETWORK_SPACING = args.network_overlap # -v network oVerlap # Changes distance between nodes
-        
-directories = common.initialise_subdirs(['assets', 'big_image'])
+
+subdir_names = ['assets', 'big_image']
+directories = common.initialise_subdirs(subdir_names)
+
 DB_LOCATION = common.get_db_path()
 
 MODE = (1, 0)
@@ -381,7 +383,7 @@ def draw_map(region_key):
     print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(HQ_TILE_SIZE)+'x'+str(HQ_TILE_SIZE),'hq image tiles' 
     
     region_dir = os.path.join(directories[1], region[1])
-    common.make_dir_if_not_found(region_dir)
+    common.renew_dir(region_dir)
     
     #row strips
     for row in range(images_required[1]):
