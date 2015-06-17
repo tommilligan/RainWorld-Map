@@ -136,7 +136,9 @@ def zoomify(path, output_dir):
         metadata_path = os.path.join(path, METADATA_FILE)
         if os.path.isfile(metadata_path):
             file_dir = os.path.join(output_dir, os.path.basename(os.path.normpath(path)))
-            common.renew_dir(file_dir)
+            user_check = common.renew_dir(file_dir)
+            if user_check is not True:
+                return False
             tree_read = ET.parse(metadata_path)
             root_read = tree_read.getroot()
             # Trasform to integer values for use
@@ -145,7 +147,7 @@ def zoomify(path, output_dir):
             cols = divisions_required(meta['WIDTH'], meta['TILESIZE'])
             meta_size = tuple([meta['WIDTH'], meta['HEIGHT']])
             # The max zoom needed to generate a single hq_tile at original resolution
-            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2)))
+            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2))+1)
             # The max zoom needed to generate the whole image at original resolution
             hq_zoom_max = max_zoom_level(meta_size)
             # The zoom levels missing, that will need to be composited after initial zoomification needed to generate the whole image at original resolution

@@ -149,7 +149,7 @@ def generate_palette(region_key):
                        'icon': (0, 255, 102)
                        })
     elif PALETTE == 'debug':
-        values.update({'title': (0, 0, 0),
+        values.update({'title': (0, 255, 0),
                        'bg': (255, 255, 255),
                        'detail': (255, 0, 0),
                        'icon': (255, 63, 0),
@@ -383,7 +383,9 @@ def draw_map(region_key):
     print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(HQ_TILE_SIZE)+'x'+str(HQ_TILE_SIZE),'hq image tiles' 
     
     region_dir = os.path.join(directories[1], region[1])
-    common.renew_dir(region_dir)
+    user_check = common.renew_dir(region_dir)
+    if user_check is not True:
+        return False
     
     #row strips
     for row in range(images_required[1]):

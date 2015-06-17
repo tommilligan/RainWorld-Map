@@ -74,7 +74,6 @@ def renew_dir(dir_path):
     else:
         make_dir_if_not_found(dir_path)
         return True
-    return None
 
 def initialise_subdirs(subdir_names):
     '''Appends subdir names to the root directory, makes subdirs if they don't exist, and returns their absolute paths'''
