@@ -36,11 +36,13 @@ html, body, #map {
 var region = GetURLParameter('region');
 
 // Get data about image from XML
-var src_dir = 'map_tiles/'+region+'/';
+var tile_dir = 'map_tiles/'
+var src_dir = tile_dir+region+'/';
 var src_meta = src_dir+'ImageProperties.xml';
-var src_init = src_dir+'LeafletInit.xml';
+var src_init = tile_dir+'LeafletInit.xml';
 var xmlDoc = $.ajax({type: "GET", url: src_meta, async: false}).responseText;
 var xmlInit = $.ajax({type: "GET", url: src_init, async: false}).responseText;
+var region_xml = $(xmlInit).find(region)
 
 // Make leaflet viewer
 var map = L.map('map').setView([0, 0], 0);
@@ -50,7 +52,7 @@ L.tileLayer.zoomify(src_dir, {
     tolerance: 0.8,
     attribution: '<a href="http://forums.tigsource.com/index.php?topic=25183.0">Rain World</a> alpha 150303'
 }).addTo(map);
-map.panBy([parseInt($(xmlInit).attr('INIT_X'), 10), parseInt($(xmlInit).attr('INIT_Y'), 10)]);
-map.zoomIn(parseInt($(xmlInit).attr('INIT_Z'), 10));
+map.panBy([parseInt(region_xml.attr('INIT_X'), 10), parseInt(region_xml.attr('INIT_Y'), 10)]);
+map.zoomIn(parseInt(region_xml.attr('INIT_Z'), 10));
 </script>
 </body>
