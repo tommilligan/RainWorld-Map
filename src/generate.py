@@ -1,33 +1,3 @@
-'''
-OUTLINE OF PROGRAM
-
-Define all variables and palette colors
-
-Define custom functions
-For each region:
-    Take lowest numbered area and add as starting point
-    For each area so far identified:
-        For each area attached
-            If not already found
-                Calculate initial graph position, store to dict
-                Add to list of identified areas
-    Optimise graph positions
-    Make big image depending on how many areas are present
-    For each area:
-        Add screenshot (or placeholder) to map
-        For each node:
-            Calculate connections and positions, store to dict
-            
-    Plot dicts to big image in desired order (to give correct layering)
-    Save big image image
-'''
-
-# Get colour of image bg
-''' Make icon an inverted rgb color of underlying image
-screenshot_px_topleft = screenshot.getpixel((0,0))
-ICON_COLOR = rgb_invert(screenshot_px_topleft)
-'''
-
 from PIL import Image, ImageDraw, ImageFont
 import os
 import sqlite3
@@ -40,37 +10,11 @@ import xml.etree.ElementTree as ET
 
 import common
 
-
 ''' PIXEL DATA
         import numpy as np
         px = np.asarray(screenshot.getdata())
         print px.shape
         '''
-
-
-parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments
-parser.add_argument('-p', '--palette', default='default',
-                    help='Color palette and format options to use')
-parser.add_argument('-r', '--region',
-                    help='Region to render - default is all')
-parser.add_argument('-s', '--scale', default=1.0, type=float,
-                    help='Scale final image (1.0 is actual, 0.5 is half size)')
-parser.add_argument('-k', '--k-value', default=3.0, type=float,
-                    help='Spring constant passed to the Fruchterman-Reingold algorithm. Changes network shape')
-parser.add_argument('-v', '--network-overlap', default=3.0, type=float,
-                    help='Increases spacing between nodes (after position optimisation)')
-parser.add_argument('--world', default=False, action='store_true',
-                    help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
-parser.add_argument('--force', default=False, action='store_true',
-                    help='Force map to be created and saved as a single image file. May cause crash or instability')
-args = parser.parse_args()
-PALETTE = args.palette
-SPECIFIED_REGION = args.region
-WORLD_MAP = args.world
-FORCE_SINGLE = args.force
-IMAGE_SCALE_FACTOR = args.scale
-NETWORK_CONTRACTION = args.k_value # -k spring Konstant # Changes style of network
-NETWORK_SPACING = args.network_overlap # -v network oVerlap # Changes distance between nodes
 
 subdir_names = ['assets', 'big_image']
 directories = common.initialise_subdirs(subdir_names)
@@ -84,111 +28,79 @@ a: 0=width, 1=depth (order in which initial positions are calculated)
 b: 0=final, 1=continuous, 2=none (how ofter spring_layout is calculated)
 '''
 
-'''
-PALETTE = string
-> default
-> seamless - try and blend into the Rain World color palette as much as possible
-> neon - easy to read, easy to follow map
-> debug - awful colours, all detail shown
-
-each color property is a dictionary with the palette name as keys, and must have a default
-e.g. dict = {'default': (0, 0, 0), 'debug': (255, 0, 0)}
-'''
-
-#palettes
-def pal_get(choices):
-    if PALETTE in choices:
-        return choices[PALETTE]
-    else:
-        return choices['default']
-            
-pal_skeleton_line = {'default': 0, 'debug': 6}
-pal_detail_line = {'default': 9, 'debug': 12}
-pal_font_size = {'default': 128, 'debug': 192}
-pal_icon_scale = {'default': 1.0, 'debug': 3.0}
-
+# even numbers are best
+LABEL_IMAGE_DIR = os.path.join(directories[0], 'labels')
+MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
+        
 def region_property(region_key, property):
-    conn = sqlite3.connect(DB_LOCATION)
-    region_cursor = conn.cursor()
-    region_cursor.execute('SELECT * FROM regions WHERE key = ?', (region_key,))
-    value = region_cursor.fetchone()
-    headers = region_cursor.description
-    for i, h in enumerate(headers):
-        if h[0] == property:
-            return value[i]
+        conn = sqlite3.connect(DB_LOCATION)
+        region_cursor = conn.cursor()
+        region_cursor.execute('SELECT * FROM regions WHERE key = ?', (region_key,))
+        value = region_cursor.fetchone()
+        headers = region_cursor.description
+        for i, h in enumerate(headers):
+            if h[0] == property:
+                return value[i]
 
 def list_to_tuple(val_list):
     val_tuple = tuple(int(x) for x in val_list.split())
     return val_tuple
             
-def generate_palette(region_key):
+def generate_palette(palette_name, region_key, scale=1.0):
     # Default palette
     values = {'title': (255, 255, 255),
               'bg': (0, 0, 0),
               'detail': (100, 100, 100),
               'skeleton': None,
               'icon': (200, 200, 200),
-              'missing_screenshot_fg': (255, 255, 255)
+              'missing_screenshot_fg': (255, 255, 255),
+              'skeleton_line': 0,
+              'detail_line': 9,
+              'font_size': 128,
+              'icon_scale': 1.0
               }
     # Derived values
     values.update({'missing_screenshot_bg': values['bg']
                    })
     
     # Overwrite defaults with new color schemes as required
-    if PALETTE == 'seamless':
+    if palette_name == 'seamless':
         # Get relevant values for each region from DB
         values.update({'title': list_to_tuple(region_property(region_key, 'rgb_highlight')),
                        'bg': list_to_tuple(region_property(region_key, 'rgb_edge')),
                        'detail': list_to_tuple(region_property(region_key, 'rgb_bg')),
                        'icon': list_to_tuple(region_property(region_key, 'rgb_lowlight'))
                        })
-    elif PALETTE == 'neon':
+    elif palette_name == 'neon':
         values.update({'title': (255, 0, 102),
                        'bg': tuple([int(float(x)/2) for x in list_to_tuple(region_property(region_key, 'rgb_edge'))]),
                        'detail': (0, 102, 255),
                        'icon': (0, 255, 102)
                        })
-    elif PALETTE == 'debug':
+    elif palette_name == 'debug':
         values.update({'title': (0, 255, 0),
                        'bg': (255, 255, 255),
                        'detail': (255, 0, 0),
                        'icon': (255, 63, 0),
                        'missing_screenshot_bg': (0, 255, 0),
                        'missing_screenshot_fg': (0, 0, 0),
-                       'skeleton': (255, 255, 0)
+                       'skeleton': (255, 255, 0),
+                       'skeleton_line': 6,
+                       'detail_line': 23,
+                       'font_size': 192,
+                       'icon_scale': 3.0
                        })
+    # Scale to image
+    for key, val in values.iteritems():
+        try:
+            values.update({key: int(math.ceil(float(val)*scale))})
+        except TypeError:
+            None
+    
     return values
-     
-# even numbers are best
-LABEL_IMAGE_DIR = os.path.join(directories[0], 'labels')
-MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
 
-DEFAULT_REGION = 'suburban'
-RAW_SCREENSHOT_SIZE = (1366, 768)
-HQ_TILE_LEVEL = int(5)
-HQ_TILE_SIZE = 256*2**HQ_TILE_LEVEL
-SCREENSHOT_RESIZE_RATIO = IMAGE_SCALE_FACTOR
-ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)])
-IMAGE_PADDING = int(800*IMAGE_SCALE_FACTOR)
-LABEL_IMAGE_INSET = int(100*IMAGE_SCALE_FACTOR)
-LABEL_IMAGE_SPACING = int(20*IMAGE_SCALE_FACTOR)
-LABEL_IMAGE_SCALE = pal_get(pal_icon_scale)*IMAGE_SCALE_FACTOR
-FONT_SIZE = int(pal_get(pal_font_size)*IMAGE_SCALE_FACTOR)
-SKELETON_LINE_WIDTH = int(pal_get(pal_skeleton_line)*IMAGE_SCALE_FACTOR)
-DETAIL_LINE_WIDTH = int(pal_get(pal_detail_line)*IMAGE_SCALE_FACTOR)
-
-LABEL_LINE_HEIGHT = FONT_SIZE+6
-LABEL_LINE_OFFSET = int(FONT_SIZE/2)
-FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
-font = ImageFont.truetype(font=FONT_PATH, size=FONT_SIZE)
-METADATA_FILE = 'ImageProperties.xml'
-
-
-# A networkx object is used to hold all properties
-
-# Take location of screenshot and xth line, and return position. If x = 0 returns scrn
-def label_line_topleft(scrn, x):
-    return tuple([scrn[0]+(LABEL_LINE_OFFSET*x), scrn[1]-(LABEL_LINE_HEIGHT*x)])
+def label_line_topleft(scrn, x, line_offset=(0,0)):
+    return tuple([scrn[y]+(line_offset[y]*x) for y in range(2)])
 
 def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
@@ -207,7 +119,7 @@ def draw_network(draw, graph, position_dict, line_width, color, hq_position=(0, 
             draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
     return None  
 
-def get_area_screenshot(area):
+def get_area_screenshot(area, image_scale_factor=1):
     screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
     to_return = None
     if os.path.isfile(screenshot_path):
@@ -218,11 +130,28 @@ def get_area_screenshot(area):
         overlay = Image.new('RGBA', mask.size, color=image_palette['missing_screenshot_fg'])
         base.paste(overlay, box=(0,0), mask=mask)
         to_return = base
-    if SCREENSHOT_RESIZE_RATIO != 1.0:
-        to_return = to_return.resize(tuple([int(to_return.size[x]*SCREENSHOT_RESIZE_RATIO) for x in range(2)]))
+    if image_scale_factor != 1.0:
+        to_return = to_return.resize(tuple([int(to_return.size[x]*image_scale_factor) for x in range(2)]))
     return to_return
     
-def draw_map(region_key):
+def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, single_image=False):
+    DEFAULT_REGION = 'suburban'
+    RAW_SCREENSHOT_SIZE = (1366, 768)
+    HQ_TILE_LEVEL = int(5)
+    HQ_TILE_SIZE = 256*2**HQ_TILE_LEVEL
+    SCREENSHOT_RESIZE_RATIO = image_scale_factor
+    ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*image_scale_factor) for x in range(2)])
+    IMAGE_PADDING = int(800*image_scale_factor)
+    LABEL_IMAGE_INSET = int(100*image_scale_factor)
+    LABEL_IMAGE_SPACING = int(20*image_scale_factor)
+
+    image_palette = generate_palette(palette_name, region_key, scale=image_scale_factor)
+    
+    line_offset = (int(image_palette['font_size']/2), -1*(image_palette['font_size']+6))
+    FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
+    font = ImageFont.truetype(font=FONT_PATH, size=image_palette['font_size'])
+    METADATA_FILE = 'ImageProperties.xml'
+    
     conn = sqlite3.connect(DB_LOCATION)
     region_cursor = conn.cursor()
     region_cursor.execute('SELECT key, name, default_area FROM regions WHERE key = ?', (region_key,))
@@ -282,7 +211,7 @@ def draw_map(region_key):
                     link_region = link_cursor.fetchone()
                     if link_region:
                         # If linked area is in same region OR world-map flag is set, add to list of areas to expand upon
-                        if (link_region[0] == region[0]) and (WORLD_MAP is False):
+                        if (link_region[0] == region[0]) and (draw_world is False):
                             pos_to_expand.append(link_node[2])
                     else:
                         print 'ERROR: Linked region '+str(link_node[2])+' not found in areas list'
@@ -313,7 +242,7 @@ def draw_map(region_key):
     else:
         # optimise node positions using Fruchterman-Reingold force-directed algorithm
         opt_dist_default = 1/math.sqrt(len(pos_rough))
-        opt_dist = opt_dist_default/NETWORK_CONTRACTION
+        opt_dist = opt_dist_default/network_contraction
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             # WARNING pos_spring generates a numpy based FutureWarning
@@ -324,7 +253,7 @@ def draw_map(region_key):
         G.node[key]['pos_spring'] = pos_spring[key]
     
     # make image using positions given
-    SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*NETWORK_SPACING)
+    SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*network_overlap)
     image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
 
     # convert pos_spring (0-1 space) to image space (px)
@@ -345,7 +274,7 @@ def draw_map(region_key):
         #print '>>> Area', key, G.node[key]['name']
         
         screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
-        G.node[key]['screenshot'] = get_area_screenshot(key)
+        G.node[key]['screenshot'] = get_area_screenshot(key, image_scale_factor=image_scale_factor)
         G.node[key]['pos_topleft_px'] = tuple(int(math.floor(pos[x]-G.node[key]['screenshot'].size[x]/2)) for x in range(2))
         
         #detail edges added to graph & dict objects to be drawn later
@@ -356,7 +285,7 @@ def draw_map(region_key):
             if not H.has_node(node[3]):
                 #add node to detailed graph and store position
                 H.add_node(node[3])
-                node_pos = tuple([pos[x]+node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
+                node_pos = tuple([pos[x]+node[x]*image_scale_factor for x in range(2)])
                 H.node[node[3]]['pos_detail_px'] = node_pos
                 # look up connecting node id -> area id
                 link_cursor = conn.cursor()
@@ -367,7 +296,7 @@ def draw_map(region_key):
                     H.add_node(node[2])
                     H.add_edge(node[2], node[3])
                     link_area_pos = G.node[link_node[2]]['pos_px']
-                    link_node_pos = tuple([link_area_pos[x]+link_node[x]*SCREENSHOT_RESIZE_RATIO for x in range(2)])
+                    link_node_pos = tuple([link_area_pos[x]+link_node[x]*image_scale_factor for x in range(2)])
                     H.node[node[2]]['pos_detail_px'] = link_node_pos        
         # save room type
         if label[1]:
@@ -376,7 +305,6 @@ def draw_map(region_key):
             G.node[key]['type'] = None
     
     #Drawing
-    image_palette = generate_palette(region_key)
     # New image errors above arbitrary size (OS limit on single process memory ~2gb)
     #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
     images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
@@ -408,19 +336,19 @@ def draw_map(region_key):
             
             #draw skeleton edges if color specified in palette
             if image_palette['skeleton']:
-                draw_network(big_draw, G, 'pos_px', SKELETON_LINE_WIDTH, image_palette['skeleton'], hq_position=hq_position)
+                draw_network(big_draw, G, 'pos_px',  image_palette['skeleton_line'], image_palette['skeleton'], hq_position=hq_position)
                    
             #draw detail edges
-            draw_network(big_draw, H, 'pos_detail_px', DETAIL_LINE_WIDTH, image_palette['detail'], hq_position=hq_position)
+            draw_network(big_draw, H, 'pos_detail_px', image_palette['detail_line'], image_palette['detail'], hq_position=hq_position)
             
             #draw titles
             for key in G.nodes():
                 if G.node[key]['name']:
                     text = G.node[key]['name']
-                    if PALETTE == 'debug':
+                    if palette_name == 'debug':
                         text = text+' ('+str(key)+')'
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 1), text, font=font, fill=image_palette['title'])
+                    big_draw.text(label_line_topleft(adj_topleft_px, 1, line_offset), text, font=font, fill=image_palette['title'])
             
             #draw labels and icons
             for key in G.nodes():
@@ -428,7 +356,7 @@ def draw_map(region_key):
                     label_list = sorted(G.node[key]['type'].split(), reverse=True)
                     label_text = str('/'.join(label_list)+' room').upper()
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 2), label_text, font=font, fill=image_palette['icon'])
+                    big_draw.text(label_line_topleft(adj_topleft_px, 2, line_offset), label_text, font=font, fill=image_palette['icon'])
                     label_col_current_height = 0
                     for label in label_list:
                         # Load icon mask
@@ -436,7 +364,7 @@ def draw_map(region_key):
                         if os.path.isfile(label_path):
                             label_mask = Image.open(label_path)
                             
-                            label_mask = label_mask.resize(tuple([int(label_mask.size[x]*LABEL_IMAGE_SCALE) for x in range (2)]))
+                            label_mask = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
                             label_image = Image.new('RGB', label_mask.size, color=image_palette['icon']) 
                             # Centre labels and add padding
                             label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)-hq_position[1]])
@@ -458,18 +386,54 @@ def draw_map(region_key):
                    }
     tree = ET.ElementTree(root)
     tree.write(os.path.join(region_dir, METADATA_FILE))
-    return None
+    return region_dir # Return directory path of saved images
+'''
+def main():       
+    parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments
+    parser.add_argument('-p', '--palette', default='default',
+                        help='Color palette and format options to use')
+    parser.add_argument('-r', '--region',
+                        help='Region to render - default is all')
+    parser.add_argument('-s', '--scale', default=1.0, type=float,
+                        help='Scale final image (1.0 is actual, 0.5 is half size)')
+    parser.add_argument('-k', '--k-value', default=3.0, type=float,
+                        help='Spring constant passed to the Fruchterman-Reingold algorithm. Changes network shape')
+    parser.add_argument('-v', '--network-overlap', default=3.0, type=float,
+                        help='Increases spacing between nodes (after position optimisation)')
+    parser.add_argument('--world', default=False, action='store_true',
+                        help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
+    parser.add_argument('--force', default=False, action='store_true',
+                        help='Force map to be created and saved as a single image file. May cause crash or instability')
+    args = parser.parse_args()
 
-conn = sqlite3.connect(DB_LOCATION)
-region_cursor = conn.cursor()
-if SPECIFIED_REGION or WORLD_MAP:
-    region_cursor.execute('SELECT key FROM regions WHERE name = ?', (SPECIFIED_REGION.lower(),))
-    region = region_cursor.fetchone()
-    if region:
-        draw_map(region[0])
-else:
-    region_cursor.execute('SELECT key FROM regions ORDER BY key ASC')
-    regions = region_cursor.fetchall()
-    # print region maps separately
-    for region in regions:
-        draw_map(region[0])
+    # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
+    conn = sqlite3.connect(common.get_db_path())
+    region_cursor = conn.cursor()
+    if args.region or args.world:
+        region_cursor.execute('SELECT key FROM regions WHERE name = ?', (args.region.lower(),))
+        region = region_cursor.fetchone()
+        if region:
+            draw_map(region[0],
+                     palette_name=args.palette,
+                     image_scale_factor=args.scale,
+                     network_contraction=args.k_value,
+                     network_overlap=args.network_overlap,
+                     draw_world=args.world,
+                     single_image=args.force
+                     )
+    else:
+        region_cursor.execute('SELECT key FROM regions ORDER BY key ASC')
+        regions = region_cursor.fetchall()
+        # print region maps separately
+        for region in regions:
+            draw_map(region[0],
+                     palette_name=args.palette,
+                     image_scale_factor=args.scale,
+                     network_contraction=args.k_value,
+                     network_overlap=args.network_overlap,
+                     draw_world=args.world,
+                     single_image=args.force
+                     )
+        
+if __name__ == '__main__':
+    main()'''

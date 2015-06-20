@@ -147,7 +147,7 @@ def zoomify(path, output_dir):
             cols = divisions_required(meta['WIDTH'], meta['TILESIZE'])
             meta_size = tuple([meta['WIDTH'], meta['HEIGHT']])
             # The max zoom needed to generate a single hq_tile at original resolution
-            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2))+1)
+            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2))) #+1
             # The max zoom needed to generate the whole image at original resolution
             hq_zoom_max = max_zoom_level(meta_size)
             # The zoom levels missing, that will need to be composited after initial zoomification needed to generate the whole image at original resolution
@@ -201,29 +201,31 @@ def zoomify(path, output_dir):
     tree = ET.ElementTree(root)
     tree.write(os.path.join(file_dir, METADATA_FILE))
     print '>> '+root.attrib['WIDTH']+'x'+root.attrib['HEIGHT']+' image saved as '+root.attrib['NUMTILES'], root.attrib['TILESIZE']+'px tiles in '+str(int(math.ceil(float(root.attrib['NUMTILES'])/float(TILES_PER_SUBDIR))))+' subdirectories'
-
+'''
 def main():
+    # Default in and out directories
+    directories = common.initialise_subdirs(['big_image', 'zoomify_tiles'])
+
     parser = argparse.ArgumentParser(description='Make big map image from screenshots and connection data') #Parse arguments 
     parser.add_argument('-i', '--input', default=None,
-                        help='Input file or direcory. Default is all subdirs of big_image')
-    #parser.add_argument('-o', '--output', default=None,
-    #                    help='Output direcory. Default is ')
+                        help='Input file or direcory. Default is all subdirs of "../'+directories[0]+'"')
+    parser.add_argument('-o', '--output', default=None,
+                        help='Output direcory. Default is "../'+directories[1]+'"')
     args = parser.parse_args()
-    INPUT_PATH = args.input
-    #OUTPUT_PATH = args.output
+    INPUT_PATH = os.path.realpath(os.path.join(os.getcwd(), args.input))
+    OUTPUT_PATH = os.path.realpath(os.path.join(os.getcwd(), directories[1]))
+    if args.output:
+        OUTPUT_PATH = os.path.realpath(os.path.join(os.getcwd(), args.output))  
     
-    # Get directory names, make if they don't exist, check only one input file, get input file path
-    directories = common.initialise_subdirs(['big_image', 'zoomify_tiles'])
     if INPUT_PATH is None:
         input_files = [os.path.join(directories[0], name) for name in os.listdir(directories[0])]
         if len(input_files) > 0:
             for file_path in input_files:
-                zoomify(file_path, directories[1])
+                zoomify(file_path, OUTPUT_PATH)
         else:
             sys.exit('No valid input images.')
     else:
-        file_path = os.path.realpath(os.path.join(os.getcwd(), INPUT_PATH))
-        zoomify(file_path, directories[1])
+        zoomify(INPUT_PATH, OUTPUT_PATH)
     
 if __name__ == "__main__":
-    main()
+    main()'''
