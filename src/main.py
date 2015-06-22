@@ -34,35 +34,32 @@ def main():
     # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
     conn = sqlite3.connect(common.get_db_path())
     region_cursor = conn.cursor()
-    if args.region or args.world:
+    region_keys = []
+    if args.region:
         region_cursor.execute('SELECT key FROM regions WHERE name = ?', (args.region.lower(),))
         region = region_cursor.fetchone()
         if region:
-            big_image_path = generate.draw_map(region[0],
-                             palette_name=args.palette,
-                             image_scale_factor=args.scale,
-                             network_contraction=args.k_value,
-                             network_overlap=args.network_overlap,
-                             draw_world=args.world,
-                             single_image=args.force
-                             )
-            zoomify.zoomify(big_image_path, OUTPUT_PATH)
+            region_keys = [region[0]]
         else:
             print args.region, 'not found in region database'
+            return False
     else:
         region_cursor.execute('SELECT key FROM regions ORDER BY key ASC')
         regions = region_cursor.fetchall()
         # print region maps separately
         for region in regions:
-            big_image_path = generate.draw_map(region[0],
-                             palette_name=args.palette,
-                             image_scale_factor=args.scale,
-                             network_contraction=args.k_value,
-                             network_overlap=args.network_overlap,
-                             draw_world=args.world,
-                             single_image=args.force
-                             )
-            zoomify.zoomify(big_image_path, OUTPUT_PATH)
+            region_keys.append(region[0])
+        
+    for region_key in region_keys:
+        big_image_path = generate.draw_map(region_key,
+                         palette_name=args.palette,
+                         image_scale_factor=args.scale,
+                         network_contraction=args.k_value,
+                         network_overlap=args.network_overlap,
+                         draw_world=args.world,
+                         single_image=args.force
+                         )
+        zoomify.zoomify(big_image_path, OUTPUT_PATH)
     
 if __name__ == "__main__":
     main()

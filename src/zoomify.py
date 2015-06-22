@@ -147,7 +147,7 @@ def zoomify(path, output_dir):
             cols = divisions_required(meta['WIDTH'], meta['TILESIZE'])
             meta_size = tuple([meta['WIDTH'], meta['HEIGHT']])
             # The max zoom needed to generate a single hq_tile at original resolution
-            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2))) #+1
+            hq_zoom_range = int(math.ceil(math.log(meta['TILESIZE']/256, 2))+1) #+1
             # The max zoom needed to generate the whole image at original resolution
             hq_zoom_max = max_zoom_level(meta_size)
             # The zoom levels missing, that will need to be composited after initial zoomification needed to generate the whole image at original resolution

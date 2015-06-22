@@ -25,12 +25,13 @@ MODE = (1, 0)
 '''
 MODE = (a, b)
 a: 0=width, 1=depth (order in which initial positions are calculated)
-b: 0=final, 1=continuous, 2=none (how ofter spring_layout is calculated)
+b: 0=final, 2=none (how ofter spring_layout is calculated)
 '''
 
 # even numbers are best
 LABEL_IMAGE_DIR = os.path.join(directories[0], 'labels')
 MISSING_SCRN_OVERLAY_PATH = os.path.join(directories[0], 'misc', 'rain_mask.png')
+TRANSPARENT_PIXEL_PATH = os.path.join(directories[0], 'misc', 'semi.png')
         
 def region_property(region_key, property):
         conn = sqlite3.connect(DB_LOCATION)
@@ -42,7 +43,7 @@ def region_property(region_key, property):
             if h[0] == property:
                 return value[i]
 
-def list_to_tuple(val_list):
+def sentence_to_tuple(val_list):
     val_tuple = tuple(int(x) for x in val_list.split())
     return val_tuple
             
@@ -56,22 +57,29 @@ def generate_palette(palette_name, region_key, scale=1.0):
               'skeleton_line': 0,
               'detail_line': 16,
               'font_size': 128,
-              'icon_scale': 1.5
+              'icon_scale': 1.0,
+              'label_image_inset': 100,
+              'label_image_spacing': 20
               }
     
     # Overwrite defaults with new color schemes as required
     if palette_name == 'seamless':
         # Get relevant values for each region from DB
-        values.update({'title': list_to_tuple(region_property(region_key, 'rgb_highlight')),
-                       'bg': list_to_tuple(region_property(region_key, 'rgb_edge')),
-                       'detail': tuple([int(min(255, float(x)*1.5)) for x in list_to_tuple(region_property(region_key, 'rgb_bg'))]),
-                       'icon': list_to_tuple(region_property(region_key, 'rgb_lowlight'))
+        values.update({'title': sentence_to_tuple(region_property(region_key, 'rgb_highlight')),
+                       'bg': sentence_to_tuple(region_property(region_key, 'rgb_edge')),
+                       'detail': tuple([int(min(255, float(x)*1.5)) for x in sentence_to_tuple(region_property(region_key, 'rgb_bg'))]),
+                       'icon': sentence_to_tuple(region_property(region_key, 'rgb_lowlight')+' 175'),
+                       'font_size': 256,
+                       'icon_scale': 3.0
                        })
     elif palette_name == 'neon':
         values.update({'title': (255, 0, 102),
-                       'bg': tuple([int(float(x)/2) for x in list_to_tuple(region_property(region_key, 'rgb_edge'))]),
+                       'bg': tuple([int(float(x)/2) for x in sentence_to_tuple(region_property(region_key, 'rgb_edge'))]),
                        'detail': (0, 102, 255),
-                       'icon': (0, 255, 102)
+                       'icon': (0, 255, 102, 175),
+                       'icon_scale': 2.0,
+                       'label_image_inset': 40,
+                       'label_image_spacing': 50
                        })
     elif palette_name == 'debug':
         values.update({'title': (0, 188, 195),
@@ -80,8 +88,8 @@ def generate_palette(palette_name, region_key, scale=1.0):
                        'icon': (0, 255, 0),
                        'skeleton': (255, 255, 0),
                        'skeleton_line': 16,
-                       'detail_line': 48,
-                       'font_size': 192,
+                       'detail_line': 24,
+                       'font_size': 196,
                        'icon_scale': 3.0
                        })
     # Scale to image
@@ -113,19 +121,27 @@ def draw_network(draw, graph, position_dict, line_width, color, hq_position=(0, 
             draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
     return None  
 
+def change_color(mask, color):
+    '''Takes an RGBA image and changes it's color to the given RGBA tuple format color, maintaining the original alpha values'''
+    mask = mask.convert(mode='RGBA')
+    overlay = Image.new('RGBA', mask.size, color=color)
+    mask.paste(overlay, box=(0,0), mask=mask)
+    return mask
+    
 def get_area_screenshot(area, image_scale_factor=1):
     screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
     to_return = None
     if os.path.isfile(screenshot_path):
-        to_return = Image.open(screenshot_path)
+        original = Image.open(screenshot_path)
+        to_return = original.convert(mode="RGBA")
+    # if no screenshot, put in placeholder rain image
     else:
         mask = Image.open(MISSING_SCRN_OVERLAY_PATH)
-        base = Image.new('RGBA', mask.size, color=(0, 0, 0))
-        overlay = Image.new('RGBA', mask.size, color=(255, 255, 255))
-        base.paste(overlay, box=(0,0), mask=mask)
-        to_return = base
+        to_return = change_color(mask, (255, 255, 255, 159))
+        
     if image_scale_factor != 1.0:
         to_return = to_return.resize(tuple([int(to_return.size[x]*image_scale_factor) for x in range(2)]))
+    
     return to_return
     
 def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, single_image=False):
@@ -136,8 +152,6 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
     SCREENSHOT_RESIZE_RATIO = image_scale_factor
     ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*image_scale_factor) for x in range(2)])
     IMAGE_PADDING = int(800*image_scale_factor)
-    LABEL_IMAGE_INSET = int(100*image_scale_factor)
-    LABEL_IMAGE_SPACING = int(20*image_scale_factor)
 
     image_palette = generate_palette(palette_name, region_key, scale=image_scale_factor)
     
@@ -190,39 +204,32 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
             link_node = link_cursor.fetchone()
             #if link_node is specified and exists
             if link_node:
-                # if link_node's area key not in pos list
-                if link_node[2] not in pos_rough:
-                    # add to graph as node
-                    G.add_node(area)
-                    # calculate a relative position for new area from initial area
-                    relative_px = tuple(node[x]-link_node[x] for x in range(2))
-                    # store this as as an absolute set of coordinates
-                    absolute_px = tuple(pos_rough[area][x]+relative_px[x] for x in range(2))
-                    # add room to pos list (key, (x_pos, y_pos))
-                    pos_rough.update({link_node[2] : absolute_px})
-                    # if same region (NOT region-gate), further search needed, add to pos_to_expand
-                    link_cursor = conn.cursor()
-                    link_cursor.execute('SELECT region FROM areas WHERE key = ?', (link_node[2],))
-                    link_region = link_cursor.fetchone()
-                    if link_region:
-                        # If linked area is in same region OR world-map flag is set, add to list of areas to expand upon
-                        if (link_region[0] == region[0]) and (draw_world is False):
+                # lookup linked area and region
+                link_cursor = conn.cursor()
+                link_cursor.execute('SELECT region FROM areas WHERE key = ?', (link_node[2],))
+                link_region = link_cursor.fetchone()
+                if link_region:
+                    # If linked area is in same region OR world-map flag is set, add to list of areas to expand upon
+                    if (link_region[0] == region_key) or draw_world:
+                        # if link_node's area key not in pos list
+                        if link_node[2] not in pos_rough:
+                            # add to graph as node
+                            G.add_node(area)
+                            # calculate a relative position for new area from initial area
+                            relative_px = tuple(node[x]-link_node[x] for x in range(2))
+                            # store this as as an absolute set of coordinates
+                            absolute_px = tuple(pos_rough[area][x]+relative_px[x] for x in range(2))
+                            # add room to pos list (key, (x_pos, y_pos))
+                            pos_rough.update({link_node[2] : absolute_px})
+                            # add rom to list of rooms to search from next
                             pos_to_expand.append(link_node[2])
-                    else:
-                        print 'ERROR: Linked region '+str(link_node[2])+' not found in areas list'
-                        return False
                         
-                # if link_node's area key is in pos list, it is already scheduled to be searched
+                        # add edge even if position already set
+                        G.add_edge(area, link_node[2])
+                    
                 else:
-                    None
-                # add edge whether area already has position set
-                G.add_edge(area, link_node[2])
-
-                # OPTIONAL continuous spring adjustment during addition
-                if MODE[1] == 1:
-                    pos_rough = nx.spring_layout(G, pos=pos_rough)
-                else:
-                    None
+                    print 'ERROR: Linked region '+str(link_node[2])+' not found in areas list'
+                    return False
     
     pos_spring = {}
     if MODE[1] == 2:
@@ -287,7 +294,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                 link_cursor.execute('SELECT x_pos, y_pos, area FROM nodes WHERE key = ?', (node[2],))
                 link_node = link_cursor.fetchone()
                 # add connecting node and edge (if node available)
-                if link_node:
+                if link_node[2] in G.nodes():
                     H.add_node(node[2])
                     H.add_edge(node[2], node[3])
                     link_area_pos = G.node[link_node[2]]['pos_px']
@@ -327,8 +334,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
             for key in G.nodes():
                 if G.node[key]['name']:
                     box_adj = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_image.paste(G.node[key]['screenshot'], box=box_adj)
-            
+                    big_image.paste(G.node[key]['screenshot'], box=box_adj, mask=G.node[key]['screenshot'])
             #draw skeleton edges if color specified in palette
             if image_palette['skeleton']:
                 draw_network(big_draw, G, 'pos_px',  image_palette['skeleton_line'], image_palette['skeleton'], hq_position=hq_position)
@@ -352,18 +358,18 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                     label_text = str('/'.join(label_list)+' room').upper()
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
                     big_draw.text(label_line_topleft(adj_topleft_px, 2, line_offset), label_text, font=font, fill=image_palette['icon'])
-                    label_col_current_height = 0
+                    label_col_current_height = 0+image_palette['label_image_spacing']
                     for label in label_list:
                         # Load icon mask
                         label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
                         if os.path.isfile(label_path):
                             label_mask = Image.open(label_path)
-                            label_mask_scaled = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
-                            label_image = Image.new('RGB', label_mask_scaled.size, color=image_palette['icon']) 
+                            label_mask = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
+                            label_mask = change_color(label_mask, image_palette['icon']) 
                             # Centre labels and add padding
-                            label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)-hq_position[1]])
-                            big_image.paste(label_image, box=label_topleft, mask=label_mask_scaled)
-                            label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
+                            label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+image_palette['label_image_inset']-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height)-hq_position[1]])
+                            big_image.paste(label_mask, box=label_topleft, mask=label_mask)
+                            label_col_current_height = label_col_current_height+image_palette['label_image_spacing']+label_mask.size[1]
               
             # save
             print '>> Saving', hq_name
