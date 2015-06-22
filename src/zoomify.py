@@ -135,7 +135,7 @@ def zoomify(path, output_dir):
     if os.path.isdir(path):
         metadata_path = os.path.join(path, METADATA_FILE)
         if os.path.isfile(metadata_path):
-            file_dir = os.path.join(output_dir, os.path.basename(os.path.normpath(path)))
+            file_dir = os.path.join(output_dir, os.path.basename(os.path.normpath(path)).replace(' ', '_'))
             user_check = common.renew_dir(file_dir)
             if user_check is not True:
                 return False
@@ -176,7 +176,7 @@ def zoomify(path, output_dir):
     #if just single image file
     else:
         file_prefix = str(os.path.split(path)[1]).split('.')
-        file_dir = os.path.join(output_dir, file_prefix[0])
+        file_dir = os.path.join(output_dir, file_prefix[0].replace(' ', '_'))
         common.make_dir_if_not_found(file_dir)
         # Open image and determine size, tiles and zoom levels required
         input_path = os.path.join(path)

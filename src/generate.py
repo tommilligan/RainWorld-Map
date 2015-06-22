@@ -53,22 +53,18 @@ def generate_palette(palette_name, region_key, scale=1.0):
               'detail': (100, 100, 100),
               'skeleton': None,
               'icon': (200, 200, 200),
-              'missing_screenshot_fg': (255, 255, 255),
               'skeleton_line': 0,
-              'detail_line': 9,
+              'detail_line': 16,
               'font_size': 128,
-              'icon_scale': 1.0
+              'icon_scale': 1.5
               }
-    # Derived values
-    values.update({'missing_screenshot_bg': values['bg']
-                   })
     
     # Overwrite defaults with new color schemes as required
     if palette_name == 'seamless':
         # Get relevant values for each region from DB
         values.update({'title': list_to_tuple(region_property(region_key, 'rgb_highlight')),
                        'bg': list_to_tuple(region_property(region_key, 'rgb_edge')),
-                       'detail': list_to_tuple(region_property(region_key, 'rgb_bg')),
+                       'detail': tuple([int(min(255, float(x)*1.5)) for x in list_to_tuple(region_property(region_key, 'rgb_bg'))]),
                        'icon': list_to_tuple(region_property(region_key, 'rgb_lowlight'))
                        })
     elif palette_name == 'neon':
@@ -78,24 +74,22 @@ def generate_palette(palette_name, region_key, scale=1.0):
                        'icon': (0, 255, 102)
                        })
     elif palette_name == 'debug':
-        values.update({'title': (0, 255, 0),
-                       'bg': (255, 255, 255),
+        values.update({'title': (0, 188, 195),
+                       'bg': (0, 0, 0),
                        'detail': (255, 0, 0),
-                       'icon': (255, 63, 0),
-                       'missing_screenshot_bg': (0, 255, 0),
-                       'missing_screenshot_fg': (0, 0, 0),
+                       'icon': (0, 255, 0),
                        'skeleton': (255, 255, 0),
-                       'skeleton_line': 6,
-                       'detail_line': 23,
+                       'skeleton_line': 16,
+                       'detail_line': 48,
                        'font_size': 192,
                        'icon_scale': 3.0
                        })
     # Scale to image
     for key, val in values.iteritems():
-        try:
+        if isinstance(val, int):
             values.update({key: int(math.ceil(float(val)*scale))})
-        except TypeError:
-            None
+        elif isinstance(val, float):
+            values.update({key: val*scale})
     
     return values
 
@@ -126,8 +120,8 @@ def get_area_screenshot(area, image_scale_factor=1):
         to_return = Image.open(screenshot_path)
     else:
         mask = Image.open(MISSING_SCRN_OVERLAY_PATH)
-        base = Image.new('RGBA', mask.size, color=image_palette['missing_screenshot_bg'])
-        overlay = Image.new('RGBA', mask.size, color=image_palette['missing_screenshot_fg'])
+        base = Image.new('RGBA', mask.size, color=(0, 0, 0))
+        overlay = Image.new('RGBA', mask.size, color=(255, 255, 255))
         base.paste(overlay, box=(0,0), mask=mask)
         to_return = base
     if image_scale_factor != 1.0:
@@ -178,6 +172,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
     # as areas are found, add them to a list to be searched, and search them
     while len(pos_to_expand) > 0:
         # Order in which area initial positions are calculated
+        area = None
         if MODE[0] == 0:
             area = pos_to_expand.pop(0)
         elif MODE[0] == 1:
@@ -310,7 +305,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
     images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
     print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(HQ_TILE_SIZE)+'x'+str(HQ_TILE_SIZE),'hq image tiles' 
     
-    region_dir = os.path.join(directories[1], region[1])
+    region_dir = os.path.join(directories[1], region[1].replace(' ', '_'))
     user_check = common.renew_dir(region_dir)
     if user_check is not True:
         return False
@@ -363,12 +358,11 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                         label_path = os.path.join(LABEL_IMAGE_DIR, label+'.png')
                         if os.path.isfile(label_path):
                             label_mask = Image.open(label_path)
-                            
-                            label_mask = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
-                            label_image = Image.new('RGB', label_mask.size, color=image_palette['icon']) 
+                            label_mask_scaled = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
+                            label_image = Image.new('RGB', label_mask_scaled.size, color=image_palette['icon']) 
                             # Centre labels and add padding
                             label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+LABEL_IMAGE_INSET-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height+LABEL_IMAGE_SPACING)-hq_position[1]])
-                            big_image.paste(label_image, box=label_topleft, mask=label_mask)
+                            big_image.paste(label_image, box=label_topleft, mask=label_mask_scaled)
                             label_col_current_height = label_col_current_height+LABEL_IMAGE_SPACING+label_mask.size[1]
               
             # save

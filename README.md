@@ -52,19 +52,28 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
 - ~~Implement adaptive colour palette for "seamless" depending on region~~
     - ~~Generally improve colour palette system - maybe migrate to DB?~~
     - New palette - easyread
-- ~~Look at circumnavigating size limit on image generation~~
+    - Tidy up non-color palette properties, scale with image size
+- Look at circumnavigating size limit on image generation
     - ~~Partial image writing after position generation~~
         - ~~Only if over certain predicted size~~
         - ~~Adapt zoomify.py to handle multiple large slices~~
         - ~~Ensure slices written in easy-to-handle 256**n dimensions~~
+    - Implement ```--force``` flage to make single images
+    - Fix bug during low res generation
 - ~~Store initial room in region db to enable easy seed generation~~
     - ~~Check for if this key stored is present in areas - if so, use, if not revert to asc order~~
 - Make single script architecture
-    - Add command line options, suppress verbosity for modular use
+    - ~~Add command line options,~~ suppress verbosity for modular use
     - Tidy up formats and functionalise repeating motifs
-    - Change method of directory initialisation/removal to only used files
-- Implement ```--force``` flage to make single images
+    - ~~Change method of directory initialisation/removal to only used files~~
+- Image design
+    - Add alpha channel options for objects
+        - Make new RGBA object with variable mask and size and apply to objects
+- Website design
+    - map page
+        - add back button
+        - add title
+        - ~~add links to other regions? <decided against>~~
 
 ##### Good generation settings
-- suburban: ```-k 3 -v 3```
-- heavy industrial: ```-k 2.5 -v 2.5```
+- suburban, chimney canopy, heavy industrial: ```-k 3 -v 3```
