@@ -45,26 +45,45 @@
     float: right;
     text-align: right;
 }
-
+#instruction {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 200px;
+    height: 52px;
+    margin-left: -100px;
+    margin-top: -26px;
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 100000;
+}
 
 </style>
 </head>
 <body>
 <!-- Content -->
 <div>
-    <div class='banner' id='banner_left'><p><a id='index_button' href='.'>< index</a></p></div>
-    <div class='banner' id='banner_right'><p></p></div>
+    <div class='banner' id='banner_left'><p><a id='index_button' href='.'>&lt; index</a></p></div>
+    <div class='banner' id='banner_right'><p><a id='reset_button' href='javascript:window.location.href=window.location.href'>reset</a></p></div>
     <div class='banner' id='banner_title'><p id='title'></p></div>
 </div>
 <div id='map'></div>
+<div id='instruction'><p>click, drag, zoom</p></div>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
 <script type='text/javascript'>
 // Get region from GET variable
 var region = GetURLParameter('region');
-document.getElementById('index_button').className = region
-document.getElementById('title').className = region
-document.getElementById('title').innerHTML = region.replace('_', ' ')
+
+// Set relevant region class to banner links
+var banner_elements = document.getElementsByClassName('banner')
+for (i=0; i<banner_elements.length; ++i) {
+    $(banner_elements[i]).find('a').addClass(region)
+}
+// Write region as title
+var title_element = document.getElementById('title')
+$(title_element).addClass(region)
+title_element.innerHTML = region.replace('_', ' ')
 
 // Get data about image from XML
 var tile_dir = 'map_tiles/'
@@ -85,6 +104,11 @@ L.tileLayer.zoomify(src_dir, {
 }).addTo(map);
 map.panBy([parseInt(region_xml.attr('INIT_X'), 10), parseInt(region_xml.attr('INIT_Y'), 10)]);
 map.zoomIn(parseInt(region_xml.attr('INIT_Z'), 10));
+
+function hide_intro() {
+    document.getElementById('instruction').style.display = 'none';
+}
+map.on('dragstart', hide_intro);
 </script>
 
 </body>

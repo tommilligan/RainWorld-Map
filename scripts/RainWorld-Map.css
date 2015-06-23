@@ -1,10 +1,10 @@
 @font-face {
     font-family: "saxmono";
-    src: url(saxmono.ttf);
+    src: url(../assets/saxmono.ttf);
     format("truetype");
 }
 h1, h2, h3, h4, h5, h6, p {
-    font-family: "saxmono";
+    font-family: "saxmono", Courier, monospace;
     color: rgba(215, 207, 222, 1);
 }
 a {
@@ -20,7 +20,7 @@ a:link, a:visited {
     color: rgba(239, 159, 110, 1);
 }
 .heavy_industrial, a.heavy_industrial:hover, a.heavy_industrial:active {
-    color: rgba(110, 159, 239, 1);
+    color: rgba(150, 169, 201, 1);
 }
 .drainage_system, a.drainage_system:hover, a.drainage_system:active {
     color: rgba(110, 240, 168, 1);
