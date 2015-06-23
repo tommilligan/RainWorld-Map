@@ -53,13 +53,12 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
     - ~~Generally improve colour palette system - maybe migrate to DB?~~
     - New palette - easyread
     - Tidy up non-color palette properties, scale with image size
-- Look at circumnavigating size limit on image generation
+- ~~Look at circumnavigating size limit on image generation~~
     - ~~Partial image writing after position generation~~
         - ~~Only if over certain predicted size~~
         - ~~Adapt zoomify.py to handle multiple large slices~~
         - ~~Ensure slices written in easy-to-handle 256**n dimensions~~
-    - Implement ```--force``` flag to make single images
-    - Fix bug during low res generation (think fixed?)
+    - ~~Fix bug during low res generation (think fixed?)~~
 - ~~Store initial room in region db to enable easy seed generation~~
     - ~~Check for if this key stored is present in areas - if so, use, if not revert to asc order~~
 - Make single script architecture
@@ -70,10 +69,11 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
     - ~~Add alpha channel options for icons~~
         - ~~Make new RGBA object with variable mask and size and apply to objects <change_color()> function~~
 - Website design
-    - map page
-        - add back button
-        - add title
+    - ~~map page~~
+        - ~~add back button~~
+        - ~~add title~~
         - ~~add links to other regions? <decided against>~~
+    - add other regions
 
 ##### Good generation settings
 - suburban, chimney canopy, heavy industrial: ```-k 3 -v 3```

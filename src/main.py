@@ -19,12 +19,12 @@ def main():
                         help='Scale final image (1.0 is actual, 0.5 is half size)')
     parser.add_argument('-k', '--k-value', default=3.0, type=float,
                         help='Spring constant passed to the Fruchterman-Reingold algorithm. Changes network shape')
+    parser.add_argument('-i', '--iterations', default=50, type=int,
+                        help='Number of iterations for Fruchterman-Reingold algorithm, default is 50')
     parser.add_argument('-v', '--network-overlap', default=3.0, type=float,
                         help='Increases spacing between nodes (after position optimisation)')
     parser.add_argument('--world', default=False, action='store_true',
                         help='Draw the whole world, starting with the region specified by -r (or first region chosen)')
-    parser.add_argument('--force', default=False, action='store_true',
-                        help='Force map to be created and saved as a single image file. May cause crash or instability')
     args = parser.parse_args()
     
     OUTPUT_PATH = os.path.realpath(os.path.join(os.getcwd(), directories[2]))
@@ -57,7 +57,7 @@ def main():
                          network_contraction=args.k_value,
                          network_overlap=args.network_overlap,
                          draw_world=args.world,
-                         single_image=args.force
+                         iterations=args.iterations
                          )
         zoomify.zoomify(big_image_path, OUTPUT_PATH)
     

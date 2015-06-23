@@ -144,7 +144,7 @@ def get_area_screenshot(area, image_scale_factor=1):
     
     return to_return
     
-def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, single_image=False, iterations=50):
+def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, iterations=50):
     DEFAULT_REGION = 'suburban'
     RAW_SCREENSHOT_SIZE = (1366, 768)
     HQ_TILE_LEVEL = int(5)
