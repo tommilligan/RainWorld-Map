@@ -1,5 +1,7 @@
 <!doctype html>
 <head>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
 <!-- Site stylesheet -->
 <link rel="stylesheet" type="text/css" href="scripts/RainWorld-Map.css" />
 <script type='text/javascript' src='scripts/common.js'></script>
@@ -13,27 +15,56 @@
   ga('send', 'pageview');
 
 </script>
-<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
-<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
 <style>
-html, body, #map {
-    height:100%;
+#map {
+    background-color: rgba(14, 14, 14, 1);
     width: 100%;
     margin: 0;
     padding: 0;
     border: 0;
-    background-color: #000000;
+    position: absolute;
+    top: 80px;
+    bottom: 0px;
 }
+.banner {
+    height: 30px;
+    padding: 10px;
+}
+#banner_left, #banner_right {
+    width: 100px;
+}
+#banner_left {
+    float: left;
+    text-align: left;
+}
+#banner_title {
+    overflow: hidden;
+    text-align: center;
+}
+#banner_right {
+    float: right;
+    text-align: right;
+}
+
+
 </style>
 </head>
 <body>
 <!-- Content -->
+<div>
+    <div class='banner' id='banner_left'><p><a id='index_button' href='.'>< index</a></p></div>
+    <div class='banner' id='banner_right'><p></p></div>
+    <div class='banner' id='banner_title'><p id='title'></p></div>
+</div>
 <div id='map'></div>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
 <script type='text/javascript'>
 // Get region from GET variable
 var region = GetURLParameter('region');
+document.getElementById('index_button').className = region
+document.getElementById('title').className = region
+document.getElementById('title').innerHTML = region.replace('_', ' ')
 
 // Get data about image from XML
 var tile_dir = 'map_tiles/'
@@ -55,4 +86,5 @@ L.tileLayer.zoomify(src_dir, {
 map.panBy([parseInt(region_xml.attr('INIT_X'), 10), parseInt(region_xml.attr('INIT_Y'), 10)]);
 map.zoomIn(parseInt(region_xml.attr('INIT_Z'), 10));
 </script>
+
 </body>
