@@ -51,8 +51,7 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
 ## Todo List
 - ~~Implement adaptive colour palette for "seamless" depending on region~~
     - ~~Generally improve colour palette system - maybe migrate to DB?~~
-    - New palette - easyread
-    - Tidy up non-color palette properties, scale with image size
+    - ~~Tidy up non-color palette properties, scale with image size~~
 - ~~Look at circumnavigating size limit on image generation~~
     - ~~Partial image writing after position generation~~
         - ~~Only if over certain predicted size~~
@@ -68,6 +67,7 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
 - Image design
     - ~~Add alpha channel options for icons~~
         - ~~Make new RGBA object with variable mask and size and apply to objects <change_color()> function~~
+    - ~~Correctly handle padding at edge of total image (i.e. do no use for coordinates)~~
 - Website design
     - ~~map page~~
         - ~~add back button~~
@@ -76,4 +76,4 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
     - add other regions
 
 ##### Good generation settings
-- suburban, chimney canopy, heavy industrial: ```-k 3 -v 3```
+- All regions generate fine with default: ```-k 3 -v 3 -i 50```

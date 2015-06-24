@@ -1,6 +1,7 @@
 # Project Specific
-big_image/*
+big_image/
 zoomify_tiles/
+spring_seq/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

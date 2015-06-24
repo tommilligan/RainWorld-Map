@@ -19,6 +19,8 @@ def main():
                         help='Increases spacing between nodes (after position optimisation), default is 3')
     parser.add_argument('-i', '--iterations', default=50, type=int,
                         help='Number of iterations for Fruchterman-Reingold algorithm, default is 50')
+    parser.add_argument('-m', '--min', default=1, type=float,
+                        help='First value  of specified property, default is 1')
     parser.add_argument('-s', '--step', default=1, type=float,
                         help='Step of specified property, default is 1')
     parser.add_argument('-n', '--num_steps', default=10, type=int,
@@ -45,7 +47,8 @@ def main():
     
     for region_key in region_keys:
         common.renew_dir(directories[1])
-        for a[args.property] in [x * args.step for x in range(1, args.num_steps+1)]:
+        for a[args.property] in [(x*args.step)+args.min for x in range(0, args.num_steps)]:
+            # Properties that must be int
             if args.property == 'i':
                 a[args.property] = int(a[args.property])
             big_image_path = generate.draw_map(region_key,

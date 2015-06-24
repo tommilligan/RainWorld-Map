@@ -25,7 +25,6 @@ MODE = (1, 0)
 '''
 MODE = (a, b)
 a: 0=width, 1=depth (order in which initial positions are calculated)
-b: 0=final, 2=none (how ofter spring_layout is calculated)
 '''
 
 # even numbers are best
@@ -52,14 +51,17 @@ def generate_palette(palette_name, region_key, scale=1.0):
     values = {'title': (255, 255, 255),
               'bg': (0, 0, 0),
               'detail': (100, 100, 100),
-              'skeleton': None,
+              'skeleton': False,
               'icon': (200, 200, 200),
-              'skeleton_line': 0,
+              'skeleton_line': False,
+              'node_labelling': False,
               'detail_line': 16,
               'font_size': 128,
+              'font_path': os.path.join(directories[0], 'misc', 'saxmono.ttf'),
               'icon_scale': 1.0,
               'label_image_inset': 100,
-              'label_image_spacing': 20
+              'label_image_spacing': 20,
+              'image_padding': 4056
               }
     
     # Overwrite defaults with new color schemes as required
@@ -83,15 +85,17 @@ def generate_palette(palette_name, region_key, scale=1.0):
                        })
     elif palette_name == 'debug':
         values.update({'title': (0, 188, 195),
-                       'bg': (0, 0, 0),
+                       'bg': (50, 0, 50),
                        'detail': (255, 0, 0),
                        'icon': (0, 255, 0),
                        'skeleton': (255, 255, 0),
+                       'node_labelling': True,
                        'skeleton_line': 16,
                        'detail_line': 24,
                        'font_size': 196,
                        'icon_scale': 3.0
                        })
+    
     # Scale to image
     for key, val in values.iteritems():
         if isinstance(val, int):
@@ -107,18 +111,23 @@ def label_line_topleft(scrn, x, line_offset=(0,0)):
 def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
 
-def draw_network(draw, graph, position_dict, line_width, color, hq_position=(0, 0)):
+def draw_network(draw, graph, position_dict, weight=16, color=(127, 127, 127), node_labelling=False, hq_position=(0, 0)):
     '''Takes an ImageDraw object, and uses it to draw a network as held by a networkx graph object & the node property 'position_dict' containing a (x,y) location tuple'''
-    # Only draw if line_width > 0
-    if line_width > 0:
+    '''Will label nodes if labelling is given as a Pillow font object'''
+    # Only draw if weight > 0
+    if weight > 0:
         for edge in graph.edges():
             adj_start = tuple([graph.node[edge[0]][position_dict][x]-hq_position[x] for x in range(2)])
             adj_fin = tuple([graph.node[edge[1]][position_dict][x]-hq_position[x] for x in range(2)])
-            draw.line([adj_start, adj_fin], fill=color, width=line_width)
+            draw.line([adj_start, adj_fin], fill=color, width=weight)
+        def_font = ImageFont.load_default()
         for node in graph.nodes():
-            adj_tl = tuple(graph.node[node][position_dict][x]-hq_position[x]-line_width*2 for x in range(2))
-            adj_br = tuple(graph.node[node][position_dict][x]-hq_position[x]+line_width*2 for x in range(2))
+            adj_tl = tuple(graph.node[node][position_dict][x]-hq_position[x]-weight*2 for x in range(2))
+            adj_br = tuple(graph.node[node][position_dict][x]-hq_position[x]+weight*2 for x in range(2))
             draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
+            if node_labelling:
+                text_pos = tuple([adj_tl[x]-1*(adj_br[x]-adj_tl[x]) for x in range(2)])
+                draw.text(text_pos, str(node), font=def_font, fill=color)
     return None  
 
 def change_color(mask, color):
@@ -143,22 +152,17 @@ def get_area_screenshot(area, image_scale_factor=1):
         to_return = to_return.resize(tuple([int(to_return.size[x]*image_scale_factor) for x in range(2)]))
     
     return to_return
-    
-def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, iterations=50):
-    DEFAULT_REGION = 'suburban'
-    RAW_SCREENSHOT_SIZE = (1366, 768)
-    HQ_TILE_LEVEL = int(5)
-    HQ_TILE_SIZE = 256*2**HQ_TILE_LEVEL
-    SCREENSHOT_RESIZE_RATIO = image_scale_factor
-    ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*image_scale_factor) for x in range(2)])
-    IMAGE_PADDING = int(800*image_scale_factor)
 
-    image_palette = generate_palette(palette_name, region_key, scale=image_scale_factor)
+def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, iterations=50):
+    '''Hard-coded params - replace if possible'''
+    RAW_SCREENSHOT_SIZE = (1366, 768) # Roug size per image, used to estimate the size of the total image required
+    HQ_TILE_LEVEL = 5 # The level at which to split into multiple hq tiles
+    metadata_file_name = 'ImageProperties.xml'
+    ''''''
     
+    image_palette = generate_palette(palette_name, region_key, scale=image_scale_factor)
     line_offset = (int(image_palette['font_size']/2), -1*(image_palette['font_size']+6))
-    FONT_PATH = os.path.join(directories[0], 'misc', 'saxmono.ttf')
-    font = ImageFont.truetype(font=FONT_PATH, size=image_palette['font_size'])
-    METADATA_FILE = 'ImageProperties.xml'
+    font = ImageFont.truetype(font=image_palette['font_path'], size=image_palette['font_size'])
     
     conn = sqlite3.connect(DB_LOCATION)
     region_cursor = conn.cursor()
@@ -228,35 +232,29 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                         G.add_edge(area, link_node[2])
                     
                 else:
-                    print 'ERROR: Linked region '+str(link_node[2])+' not found in areas list'
+                    print '! Linked region '+str(link_node[2])+' not found in areas list'
                     return False
     
     pos_spring = {}
-    if MODE[1] == 2:
-        # do not optimise
-        # max & min value of both dimensions in rough layout
-        pos_rough_max =  max([max(pos_rough.values(), key=lambda x: x[d])[d] for d in range(2)])
-        pos_rough_min =  min([min(pos_rough.values(), key=lambda x: x[d])[d] for d in range(2)])
-        pos_rough_range = float(pos_rough_max-pos_rough_min)
-        # scale to 0-1 space in both dimensions
-        for key, pos in pos_rough.iteritems():
-            pos_spring.update({key: tuple([float(pos[d]-pos_rough_min)/pos_rough_range for d in range(2)])})
-    else:
-        # optimise node positions using Fruchterman-Reingold force-directed algorithm
-        opt_dist_default = 1/math.sqrt(len(pos_rough))
-        opt_dist = opt_dist_default/network_contraction
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            # WARNING pos_spring generates a numpy based FutureWarning
-            pos_spring = nx.spring_layout(G, pos=pos_rough, k=opt_dist, iterations=iterations)
+    # optimise node positions using Fruchterman-Reingold force-directed algorithm
+    # iterations=1 will format values to the standard output, but not actually optimise positions
+    opt_dist_default = 1/math.sqrt(len(pos_rough))
+    opt_dist = opt_dist_default/network_contraction
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # WARNING pos_spring generates a numpy based FutureWarning
+        if iterations <= 0:
+            iterations = 1
+        pos_spring = nx.spring_layout(G, pos=pos_rough, k=opt_dist, iterations=iterations)
     
     # pull pos_spring optimised values into networkx object
     for key in G.nodes():
         G.node[key]['pos_spring'] = pos_spring[key]
     
     # make image using positions given
+    ROUGH_SCREENSHOT_SIZE = tuple([int(RAW_SCREENSHOT_SIZE[x]*image_scale_factor) for x in range(2)])
     SCALE = int(max(ROUGH_SCREENSHOT_SIZE)*math.sqrt(len(G.nodes()))*network_overlap)
-    image_size_init = (SCALE+IMAGE_PADDING*4, SCALE+IMAGE_PADDING*2)
+    image_size_init = tuple([SCALE+image_palette['image_padding'] for x in range(2)])
 
     # convert pos_spring (0-1 space) to image space (px)
     image_origin = tuple(int(math.floor(image_size_init[x]/2)) for x in range(2))
@@ -294,12 +292,13 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                 link_cursor.execute('SELECT x_pos, y_pos, area FROM nodes WHERE key = ?', (node[2],))
                 link_node = link_cursor.fetchone()
                 # add connecting node and edge (if node available)
-                if link_node[2] in G.nodes():
-                    H.add_node(node[2])
-                    H.add_edge(node[2], node[3])
-                    link_area_pos = G.node[link_node[2]]['pos_px']
-                    link_node_pos = tuple([link_area_pos[x]+link_node[x]*image_scale_factor for x in range(2)])
-                    H.node[node[2]]['pos_detail_px'] = link_node_pos        
+                if link_node:
+                    if link_node[2] in G.nodes():
+                        H.add_node(node[2])
+                        H.add_edge(node[2], node[3])
+                        link_area_pos = G.node[link_node[2]]['pos_px']
+                        link_node_pos = tuple([link_area_pos[x]+link_node[x]*image_scale_factor for x in range(2)])
+                        H.node[node[2]]['pos_detail_px'] = link_node_pos
         # save room type
         if label[1]:
             G.node[key]['type'] = label[1]
@@ -309,8 +308,9 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
     #Drawing
     # New image errors above arbitrary size (OS limit on single process memory ~2gb)
     #To avoid causing a MemoryError, the map is drawn in hq tiles of 8192px (256**5) maximum edge length
-    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(HQ_TILE_SIZE))) for x in range(2)])
-    print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(HQ_TILE_SIZE)+'x'+str(HQ_TILE_SIZE),'hq image tiles' 
+    hq_tile_size = 256*2**HQ_TILE_LEVEL
+    images_required = tuple([int(math.ceil(float(image_size_init[x])/float(hq_tile_size))) for x in range(2)])
+    print '>> Total image size:', str(image_size_init[0])+'x'+str(image_size_init[1])+', splitting to', images_required[0]*images_required[1], str(hq_tile_size)+'x'+str(hq_tile_size),'hq image tiles' 
     
     region_dir = os.path.join(directories[1], region[1].replace(' ', '_'))
     user_check = common.renew_dir(region_dir)
@@ -322,8 +322,8 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
         #col strips
         for col in range(images_required[0]):
             hq_name = 'hq-'+str(col)+'-'+str(row)+'.png'
-            hq_position = tuple([HQ_TILE_SIZE*col, HQ_TILE_SIZE*row])
-            hq_spec = ([min(hq_position[x]+HQ_TILE_SIZE, image_size_init[x])-hq_position[x] for x in range(2)])
+            hq_position = tuple([hq_tile_size*col, hq_tile_size*row])
+            hq_spec = ([min(hq_position[x]+hq_tile_size, image_size_init[x])-hq_position[x] for x in range(2)])
             with warnings.catch_warnings():
                 # WARNING Image.new generates a DecompressionBomb warning with large file sizes
                 warnings.simplefilter("ignore")
@@ -339,10 +339,10 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
             
             #draw skeleton edges if color specified in palette
             if image_palette['skeleton']:
-                draw_network(big_draw, G, 'pos_px',  image_palette['skeleton_line'], image_palette['skeleton'], hq_position=hq_position)
+                draw_network(big_draw, G, 'pos_px',  weight=image_palette['skeleton_line'], color=image_palette['skeleton'], node_labelling=image_palette['node_labelling'], hq_position=hq_position)
                    
             #draw detail edges
-            draw_network(big_draw, H, 'pos_detail_px', image_palette['detail_line'], image_palette['detail'], hq_position=hq_position)
+            draw_network(big_draw, H, 'pos_detail_px', weight=image_palette['detail_line'], color=image_palette['detail'], node_labelling=image_palette['node_labelling'], hq_position=hq_position)
             
             #draw labels and icons
             for key in G.nodes():
@@ -384,10 +384,10 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                    'HEIGHT': str(image_size_init[1]),
                    'NUMTILES': str(images_required[0]*images_required[1]),
                    'NUMIMAGES': str(1),
-                   'TILESIZE': str(HQ_TILE_SIZE)
+                   'TILESIZE': str(hq_tile_size)
                    }
     tree = ET.ElementTree(root)
-    tree.write(os.path.join(region_dir, METADATA_FILE))
+    tree.write(os.path.join(region_dir, metadata_file_name))
     return region_dir # Return directory path of saved images
 
 def main():       

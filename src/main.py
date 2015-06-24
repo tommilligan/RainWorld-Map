@@ -36,22 +36,22 @@ def main():
     region_cursor = conn.cursor()
     region_keys = []
     if args.region:
-        region_cursor.execute('SELECT key FROM regions WHERE name = ?', (args.region.lower(),))
+        region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (args.region.lower(),))
         region = region_cursor.fetchone()
         if region:
-            region_keys = [region[0]]
+            region_keys = [region]
         else:
             print args.region, 'not found in region database'
             return False
     else:
-        region_cursor.execute('SELECT key FROM regions ORDER BY key ASC')
+        region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
         regions = region_cursor.fetchall()
         # print region maps separately
         for region in regions:
-            region_keys.append(region[0])
+            region_keys.append(region)
         
     for region_key in region_keys:
-        big_image_path = generate.draw_map(region_key,
+        big_image_path = generate.draw_map(region_key[0],
                          palette_name=args.palette,
                          image_scale_factor=args.scale,
                          network_contraction=args.k_value,
@@ -59,7 +59,10 @@ def main():
                          draw_world=args.world,
                          iterations=args.iterations
                          )
-        zoomify.zoomify(big_image_path, OUTPUT_PATH)
+        if big_image_path:
+            zoomify.zoomify(big_image_path, OUTPUT_PATH)
+        else:
+            print '!', region_key[1], 'failed to generate'
     
 if __name__ == "__main__":
     main()
