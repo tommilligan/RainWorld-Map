@@ -41,12 +41,12 @@ def main():
         if region:
             region_keys = [region]
         else:
-            print args.region, 'not found in region database'
+            print '!', args.region, 'not found in region database'
             return False
     else:
         region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
         regions = region_cursor.fetchall()
-        # print region maps separately
+        # save region maps separately
         for region in regions:
             region_keys.append(region)
         

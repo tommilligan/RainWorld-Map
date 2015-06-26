@@ -37,7 +37,7 @@ def main():
     if region:
         region_keys = [region[0]]
     else:
-        print args.region, 'not found in region database'
+        print '!' args.region, 'not found in region database'
         return False
     
     a = {'k': args.k_value,

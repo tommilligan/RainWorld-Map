@@ -70,13 +70,13 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
         offset is used to indicate the position of this slice in directory processing'''
     #Zoom level
     for loop_zoom in xrange(min_zoom_level, int(max_zoom_level)):
-        #DUBUG! if loop_zoom > 3: continue 
+        #if loop_zoom < 0: continue 
         area_size_multiplier = 2**(max_zoom_level-1-loop_zoom)
         area_side_length = TILE_SIZE*area_size_multiplier
         rows_required = divisions_required(big_image.size[1], area_side_length)
         cols_required = divisions_required(big_image.size[0], area_side_length)
         area_resize_ratio = TILE_SIZE/area_side_length
-        print str(loop_zoom)+'#'+str(area_side_length)
+        print '>>>', str(loop_zoom)+'#'+str(area_side_length)
         # Each row
         for loop_row in xrange(0, int(rows_required)):
             tile_origin_y = loop_row*area_side_length

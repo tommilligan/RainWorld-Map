@@ -64,6 +64,7 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
     - ~~Add command line options,~~ suppress verbosity for modular use
     - Tidy up formats and functionalise repeating motifs
     - ~~Change method of directory initialisation/removal to only used files~~
+    - outsource region key lookup to common script (main, increment)
 - Image design
     - ~~Add alpha channel options for icons~~
         - ~~Make new RGBA object with variable mask and size and apply to objects <change_color()> function~~

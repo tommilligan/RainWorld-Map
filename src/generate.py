@@ -126,7 +126,7 @@ def draw_network(draw, graph, position_dict, weight=16, color=(127, 127, 127), n
             adj_br = tuple(graph.node[node][position_dict][x]-hq_position[x]+weight*2 for x in range(2))
             draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
             if node_labelling:
-                text_pos = tuple([adj_tl[x]-1*(adj_br[x]-adj_tl[x]) for x in range(2)])
+                text_pos = tuple([adj_tl[x]-0.5*(adj_br[x]-adj_tl[x]) for x in range(2)])
                 draw.text(text_pos, str(node), font=def_font, fill=color)
     return None  
 
@@ -391,7 +391,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
     return region_dir # Return directory path of saved images
 
 def main():       
-    print 'This script should not be called directly'
+    print '! This script should not be called directly'
         
 if __name__ == '__main__':
     main()
