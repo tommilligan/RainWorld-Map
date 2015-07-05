@@ -13,7 +13,6 @@
 
   ga('create', 'UA-63854137-1', 'auto');
   ga('send', 'pageview');
-
 </script>
 <style>
 #map {
@@ -50,17 +49,14 @@
 }
 #instruction {
     position: absolute;
-    left: 50%;
     top: 50%;
-    width: 200px;
-    height: 52px;
-    margin-left: -100px;
-    margin-top: -26px;
+    width: 100%;
+    display: block;
+    overflow: auto;
     text-align: center;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.7);
     z-index: 100000;
 }
-
 </style>
 </head>
 <body>
@@ -71,47 +67,63 @@
     <div class='banner' id='banner_title'><p id='title'></p></div>
 </div>
 <div id='map'></div>
-<div id='instruction'><p>click, drag, zoom</p></div>
+<div id='instruction'><p></p></div>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
 <script type='text/javascript' src="scripts/L.TileLayer.Zoomify.js"></script>
 <script type='text/javascript'>
-// Get region from GET variable
-var region = GetURLParameter('region');
+    //Check if dependencies are available
+    if (typeof jQuery == 'undefined' || typeof L == 'undefined') {
+        document.getElementById('instruction').getElementsByTagName('p')[0].innerHTML = 'CDN error - externally hosted script(s) unavailable';
+    }
+    else {
+        // Get region from GET variable
+        var region = GetURLParameter('region');
 
-// Set relevant region class to banner links
-var banner_elements = document.getElementsByClassName('banner')
-for (i=0; i<banner_elements.length; ++i) {
-    $(banner_elements[i]).find('a').addClass(region)
-}
-// Write region as title
-var title_element = document.getElementById('title')
-$(title_element).addClass(region)
-title_element.innerHTML = region.replace('_', ' ')
+        // Set relevant region class to banner links
+        var banner_elements = document.getElementsByClassName('banner');
+        for (i=0; i<banner_elements.length; ++i) {
+            $(banner_elements[i]).find('a').addClass(region);
+        }
+        // Write region as title
+        var title_element = document.getElementById('title');
+        $(title_element).addClass(region);
+        title_element.innerHTML = region.replace('_', ' ');
 
-// Get data about image from XML
-var tile_dir = 'map_tiles/'
-var src_dir = tile_dir+region+'/';
-var src_meta = src_dir+'ImageProperties.xml';
-var src_init = tile_dir+'LeafletInit.xml';
-var xmlDoc = $.ajax({type: "GET", url: src_meta, async: false}).responseText;
-var xmlInit = $.ajax({type: "GET", url: src_init, async: false}).responseText;
-var region_xml = $(xmlInit).find(region)
+        // Get data about image from XML
+        var tile_dir = 'map_tiles/';
+        var src_dir = tile_dir+region+'/';
+        var src_meta = src_dir+'ImageProperties.xml';
+        var src_init = tile_dir+'LeafletInit.xml';
+        var xmlDoc = $.ajax({type: "GET", url: src_meta, async: false}).responseText;
+        var xmlInit = $.ajax({type: "GET", url: src_init, async: false}).responseText;
+        var region_xml = $(xmlInit).find(region);
 
-// Make leaflet viewer
-var map = L.map('map').setView([0, 0], 0);
-L.tileLayer.zoomify(src_dir, {
-    width: parseInt($(xmlDoc).attr('WIDTH'), 10),
-    height: parseInt($(xmlDoc).attr('HEIGHT'), 10),
-    tolerance: 0.8,
-    attribution: '<a href="http://forums.tigsource.com/index.php?topic=25183.0">Rain World</a> alpha 150303'
-}).addTo(map);
-map.panBy([parseInt(region_xml.attr('INIT_X'), 10), parseInt(region_xml.attr('INIT_Y'), 10)]);
-map.zoomIn(parseInt(region_xml.attr('INIT_Z'), 10));
+        var image_width = parseInt($(xmlDoc).attr('WIDTH'));
+        var image_height = parseInt($(xmlDoc).attr('HEIGHT'));
+        var max_zoom = Math.ceil(Math.log2(Math.ceil(Math.max(image_width, image_height)/parseInt($(xmlDoc).attr('TILESIZE')))));
 
-function hide_intro() {
-    document.getElementById('instruction').style.display = 'none';
-}
-map.on('dragstart', hide_intro);
+        // Make leaflet viewer
+        var map = L.map('map');
+        //map.setMaxBounds([map.unproject([0, image_width], max_zoom), map.unproject([image_height, 0], max_zoom)]);
+        map.setView([0, 0], 0);
+        map.setMaxBounds([map.unproject([0, image_width], max_zoom), map.unproject([image_height, 0], max_zoom)]); // set map bounds based on dimensions at max zoom
+        L.tileLayer.zoomify(src_dir, {
+            width: image_width,
+            height: image_height,
+            tolerance: 0.8,
+            attribution: '<a href="http://forums.tigsource.com/index.php?topic=25183.0">Rain World</a> alpha 150303'
+        }).addTo(map);
+        map.panBy([parseInt(region_xml.attr('INIT_X'), 10), parseInt(region_xml.attr('INIT_Y'), 10)]);
+        map.zoomIn(parseInt(region_xml.attr('INIT_Z'), 10));
+        
+        //Display instructions
+        document.getElementById('instruction').getElementsByTagName('p')[0].innerHTML = 'click, drag, zoom';
+        
+        //Hide instructions
+        function hide_intro() {
+            document.getElementById('instruction').style.display = 'none';
+        }
+        map.on('focus', hide_intro);
+    }
 </script>
-
 </body>
