@@ -32,18 +32,13 @@ def main():
         OUTPUT_PATH = os.path.realpath(os.path.join(os.getcwd(), args.output))   
 
     # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
-    conn = sqlite3.connect(common.get_db_path())
-    region_cursor = conn.cursor()
+    
     region_keys = []
     if args.region:
-        region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (args.region.lower(),))
-        region = region_cursor.fetchone()
-        if region:
-            region_keys = [region]
-        else:
-            print '!', args.region, 'not found in region database'
-            return False
+        region_keys = [common.lookup_region_key(args.region)]
     else:
+        conn = sqlite3.connect(common.get_db_path())
+        region_cursor = conn.cursor()
         region_cursor.execute('SELECT key, name FROM regions ORDER BY key ASC')
         regions = region_cursor.fetchall()
         # save region maps separately

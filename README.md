@@ -65,9 +65,11 @@ This exclusive and necessary bidirectional linkage can be checked by running ```
     - Tidy up formats and functionalise repeating motifs
     - ~~Change method of directory initialisation/removal to only used files~~
     - outsource region key lookup to common script (main, increment)
+    - Change way in which tiles are moved after zoomification to prevent failure (correct mathematical lookup - see zoomify js script for Leaflet)
 - Image design
-    - ~~Add alpha channel options for icons~~
-        - ~~Make new RGBA object with variable mask and size and apply to objects <change_color()> function~~
+    - ~~Add alpha channel options~~
+        - ~~For icons: Make new RGBA object with variable mask and size and apply to objects <change_color()> function~~
+        - ~~For lines: Make transparent around text; overlay semi-transparent rectangle underneath text to mask lines~~
     - ~~Correctly handle padding at edge of total image (i.e. do no use for coordinates)~~
 - Website design
     - ~~map page~~

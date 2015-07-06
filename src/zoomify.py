@@ -10,15 +10,15 @@ import xml.etree.ElementTree as ET
 
 import common
 
-TILE_SIZE = int(256)
-HQ_TILE_SIZE = int(8192)
+TILE_SIZE = 256
+HQ_TILE_SIZE = 8192
 TOP_DIR = common.root_dir()
-TILES_PER_SUBDIR = int(256)
+TILES_PER_SUBDIR = 256
 TILE_SUBDIR_PREFIX = 'TileGroup'
 METADATA_FILE = 'ImageProperties.xml'
 
 def zoom_level_max_tiles(zoom_level):
-    return zoom_level**2
+    return 2**zoom_level
     
 def zoom_level_max_px(zoom_level):
     return zoom_level_max_tiles(zoom_level)*TILE_SIZE
@@ -103,7 +103,7 @@ def zoomify_slice(big_image, max_zoom_level, output_dir, min_zoom_level=0, offse
 
 def zoomify_lowres_composite(min_zoom_level, max_zoom_level, image_size, output_dir):
     '''Designed to provide low-res composites of the lower level zoom levels, from previously generated .jpg tiles in the layer below (only for directory processing'''
-    print '>> Adding low-res preview tiles from zoom layer', min_zoom_level
+    print '>> Compositing zoom layer', min_zoom_level, 'to generate low-res tiles'
     # Area length max of min_zoom_level
     area_side_length = zoom_level_max_px(min_zoom_level)
     dim_required = divisions_required(area_side_length, TILE_SIZE)
@@ -151,7 +151,7 @@ def zoomify(path, output_dir):
             # The max zoom needed to generate the whole image at original resolution
             hq_zoom_max = max_zoom_level(meta_size)
             # The zoom levels missing, that will need to be composited after initial zoomification needed to generate the whole image at original resolution
-            hq_zoom_min = hq_zoom_max-hq_zoom_range
+            hq_zoom_min = max(0, hq_zoom_max-hq_zoom_range)
             '''add this as file prefix z_level? str(hq_zoom_level)'''
             # Each row
             for loop_row in xrange(0, int(rows)):
@@ -163,7 +163,8 @@ def zoomify(path, output_dir):
                     print '>>', tile_id
                     hq_tile = Image.open(tile_open_path)
                     zoomify_slice(hq_tile, hq_zoom_max, file_dir, min_zoom_level=hq_zoom_min, offset=hq_offset, tilesize=meta['TILESIZE'])
-            zoomify_lowres_composite(hq_zoom_min, hq_zoom_max, meta_size, file_dir)
+            if hq_zoom_min > 0:
+                zoomify_lowres_composite(hq_zoom_min, hq_zoom_max, meta_size, file_dir)
             tiles_moved = zoomify_order(meta_size, file_dir)
             #Set metadata attributes
             root.attrib.update({'WIDTH': root_read.attrib['WIDTH'],

@@ -10,7 +10,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Show the spring process')
     parser.add_argument('-r', '--region', required=True,
-                        help='Region to render - default is all')
+                        help='Region to render')
     parser.add_argument('-p', '--property', required=True, choices=['k', 'v', 'i'],
                         help='Property to increment')
     parser.add_argument('-k', '--k-value', default=3.0, type=float,
@@ -28,17 +28,7 @@ def main():
     args = parser.parse_args()
     
     # Take location of screenshot and xth line, and return position. If x = 0 returns scrn
-    conn = sqlite3.connect(common.get_db_path())
-    region_cursor = conn.cursor()
-    region_keys = []
-
-    region_cursor.execute('SELECT key FROM regions WHERE name = ?', (args.region.lower(),))
-    region = region_cursor.fetchone()
-    if region:
-        region_keys = [region[0]]
-    else:
-        print '!' args.region, 'not found in region database'
-        return False
+    region_keys = [common.lookup_region_key(args.region)]
     
     a = {'k': args.k_value,
          'v': args.network_overlap,

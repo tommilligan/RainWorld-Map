@@ -10,12 +10,6 @@ import xml.etree.ElementTree as ET
 
 import common
 
-''' PIXEL DATA
-        import numpy as np
-        px = np.asarray(screenshot.getdata())
-        print px.shape
-        '''
-
 subdir_names = ['assets', 'big_image']
 directories = common.initialise_subdirs(subdir_names)
 
@@ -61,7 +55,8 @@ def generate_palette(palette_name, region_key, scale=1.0):
               'icon_scale': 1.0,
               'label_image_inset': 100,
               'label_image_spacing': 20,
-              'image_padding': 4056
+              'image_padding': 4056,
+              'textbox_alpha': (150,)
               }
     
     # Overwrite defaults with new color schemes as required
@@ -93,7 +88,8 @@ def generate_palette(palette_name, region_key, scale=1.0):
                        'skeleton_line': 16,
                        'detail_line': 24,
                        'font_size': 196,
-                       'icon_scale': 3.0
+                       'icon_scale': 3.0,
+                       'textbox_alpha': (200,)
                        })
     
     # Scale to image
@@ -105,13 +101,14 @@ def generate_palette(palette_name, region_key, scale=1.0):
     
     return values
 
-def label_line_topleft(scrn, x, line_offset=(0,0)):
-    return tuple([scrn[y]+(line_offset[y]*x) for y in range(2)])
+def label_line_topleft(topleft, x, line_offset=(0,0)):
+    '''Returns the coordinates at which to place (sub)titles above a given set of coordinates, where x is the line number'''
+    return tuple([topleft[y]+(line_offset[y]*x) for y in range(2)])
 
 def invert_rgb(rgb):
     return tuple([255-rgb[x] for x in range(3)])
 
-def draw_network(draw, graph, position_dict, weight=16, color=(127, 127, 127), node_labelling=False, hq_position=(0, 0)):
+def draw_network(draw, graph, position_dict, weight=16, color=(127, 127, 127), node_labelling=False, hq_position=(0, 0), font=ImageFont.load_default()):
     '''Takes an ImageDraw object, and uses it to draw a network as held by a networkx graph object & the node property 'position_dict' containing a (x,y) location tuple'''
     '''Will label nodes if labelling is given as a Pillow font object'''
     # Only draw if weight > 0
@@ -120,14 +117,13 @@ def draw_network(draw, graph, position_dict, weight=16, color=(127, 127, 127), n
             adj_start = tuple([graph.node[edge[0]][position_dict][x]-hq_position[x] for x in range(2)])
             adj_fin = tuple([graph.node[edge[1]][position_dict][x]-hq_position[x] for x in range(2)])
             draw.line([adj_start, adj_fin], fill=color, width=weight)
-        def_font = ImageFont.load_default()
         for node in graph.nodes():
             adj_tl = tuple(graph.node[node][position_dict][x]-hq_position[x]-weight*2 for x in range(2))
             adj_br = tuple(graph.node[node][position_dict][x]-hq_position[x]+weight*2 for x in range(2))
             draw.ellipse([adj_tl, adj_br], fill=color, outline=color)
             if node_labelling:
-                text_pos = tuple([adj_tl[x]-0.5*(adj_br[x]-adj_tl[x]) for x in range(2)])
-                draw.text(text_pos, str(node), font=def_font, fill=color)
+                text_pos = tuple([adj_tl[x]+1*(adj_br[x]-adj_tl[x]) for x in range(2)])
+                draw.text(text_pos, str(node), font=font, fill=color)
     return None  
 
 def change_color(mask, color):
@@ -138,6 +134,7 @@ def change_color(mask, color):
     return mask
     
 def get_area_screenshot(area, image_scale_factor=1):
+    '''Returns a Pillow Image object, given an area id number. If no valid screenshot is found, a placeholder Image is returned'''
     screenshot_path = os.path.join(directories[0], 'areas', str(area)+'.jpg')
     to_return = None
     if os.path.isfile(screenshot_path):
@@ -152,7 +149,20 @@ def get_area_screenshot(area, image_scale_factor=1):
         to_return = to_return.resize(tuple([int(to_return.size[x]*image_scale_factor) for x in range(2)]))
     
     return to_return
+    
+def draw_textbox(canvas, position, text, font=ImageFont.load_default(), fill=(0, 0, 0, 255), box=(127, 127, 127, 127)):
+    '''Takes a Pillow Image object, and draws the text at the position with a backing textbox. Text and box may be any RGBA value.'''
+    canvas_draw = ImageDraw.Draw(canvas)
+    text_size_px = canvas_draw.textsize(text, font=font)
+    margin = int(math.ceil(text_size_px[1]*0.15))
+    title_mask = Image.new('RGBA', tuple([text_size_px[x]+margin*2 for x in range(2)]), color=box)
+    canvas.paste(title_mask, box=tuple([position[x]-margin for x in range(2)]), mask=title_mask)
+    canvas_draw.text(position, text, font=font, fill=fill)
+    return None
 
+def get_topleft_position(G, key, hq_position):
+    return tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
+    
 def draw_map(region_key, palette_name='default', image_scale_factor=1, network_contraction=3, network_overlap=3, draw_world=False, iterations=50):
     '''Hard-coded params - replace if possible'''
     RAW_SCREENSHOT_SIZE = (1366, 768) # Roug size per image, used to estimate the size of the total image required
@@ -334,23 +344,23 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
             #draw screenshots onto image
             for key in G.nodes():
                 if G.node[key]['name']:
-                    box_adj = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_image.paste(G.node[key]['screenshot'], box=box_adj, mask=G.node[key]['screenshot'])
+                    big_image.paste(G.node[key]['screenshot'], box=get_topleft_position(G, key, hq_position), mask=G.node[key]['screenshot'])
             
             #draw skeleton edges if color specified in palette
             if image_palette['skeleton']:
-                draw_network(big_draw, G, 'pos_px',  weight=image_palette['skeleton_line'], color=image_palette['skeleton'], node_labelling=image_palette['node_labelling'], hq_position=hq_position)
+                draw_network(big_draw, G, 'pos_px',  weight=image_palette['skeleton_line'], color=image_palette['skeleton'], node_labelling=image_palette['node_labelling'], hq_position=hq_position, font=font)
                    
             #draw detail edges
-            draw_network(big_draw, H, 'pos_detail_px', weight=image_palette['detail_line'], color=image_palette['detail'], node_labelling=image_palette['node_labelling'], hq_position=hq_position)
+            draw_network(big_draw, H, 'pos_detail_px', weight=image_palette['detail_line'], color=image_palette['detail'], node_labelling=image_palette['node_labelling'], hq_position=hq_position, font=font)
             
             #draw labels and icons
             for key in G.nodes():
                 if G.node[key]['type']:
                     label_list = sorted(G.node[key]['type'].split(), reverse=True)
                     label_text = str('/'.join(label_list)+' room').upper()
-                    adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 2, line_offset), label_text, font=font, fill=image_palette['icon'])
+                    topleft_position = get_topleft_position(G, key, hq_position)
+                    topleft_subtitle = label_line_topleft(topleft_position, 2, line_offset)
+                    draw_textbox(big_image, topleft_subtitle, label_text, font=font, fill=image_palette['icon'], box=image_palette['bg'][:3]+image_palette['textbox_alpha'])
                     label_col_current_height = 0+image_palette['label_image_spacing']
                     for label in label_list:
                         # Load icon mask
@@ -360,7 +370,7 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                             label_mask = label_mask.resize(tuple([int(label_mask.size[x]*image_palette['icon_scale']) for x in range (2)]))
                             label_mask = change_color(label_mask, image_palette['icon']) 
                             # Centre labels and add padding
-                            label_topleft = tuple([int(G.node[key]['pos_topleft_px'][0]+image_palette['label_image_inset']-(0.5*label_mask.size[0]))-hq_position[0], int(G.node[key]['pos_topleft_px'][1]+label_col_current_height)-hq_position[1]])
+                            label_topleft = tuple([int(topleft_position[0]+image_palette['label_image_inset']-(0.5*label_mask.size[0])), int(topleft_position[1]+label_col_current_height)])
                             big_image.paste(label_mask, box=label_topleft, mask=label_mask)
                             label_col_current_height = label_col_current_height+image_palette['label_image_spacing']+label_mask.size[1]
             
@@ -371,8 +381,9 @@ def draw_map(region_key, palette_name='default', image_scale_factor=1, network_c
                     if palette_name == 'debug':
                         text = text+' ('+str(key)+')'
                     adj_topleft_px = tuple([G.node[key]['pos_topleft_px'][x]-hq_position[x] for x in range(2)])
-                    big_draw.text(label_line_topleft(adj_topleft_px, 1, line_offset), text, font=font, fill=image_palette['title'])
-            
+                    topleft_title = label_line_topleft(get_topleft_position(G, key, hq_position), 1, line_offset)
+                    draw_textbox(big_image, topleft_title, text, font=font, fill=image_palette['title'], box=image_palette['bg'][:3]+image_palette['textbox_alpha'])
+
             # save
             print '>> Saving', hq_name
             big_image_path = os.path.join(region_dir, hq_name)

@@ -2,6 +2,7 @@ import os
 import errno
 import shutil
 import sys
+import sqlite3
 
 def root_dir():
     return os.path.dirname(os.path.realpath(os.path.join(sys.argv[0],'..')))
@@ -37,3 +38,14 @@ def initialise_subdirs(subdir_names):
     
 def get_db_path():
     return os.path.join(root_dir(), 'assets', 'network.db')
+    
+def lookup_region_key(name):
+    conn = sqlite3.connect(get_db_path())
+    region_cursor = conn.cursor()
+    region_cursor.execute('SELECT key, name FROM regions WHERE name = ?', (name.lower(),))
+    region = region_cursor.fetchone()
+    if region:
+        return region
+    else:
+        print '!', name, 'not found in region database'
+        raise ValueError
